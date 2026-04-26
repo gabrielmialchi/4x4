@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>[4x4] — Tech Doc Alpha 21</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,300&family=Instrument+Serif:ital@0;1&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f2eb;
+    --bg2: #ede9df;
+    --surface: #ffffff;
+    --border: #d8d2c4;
+    --border-dark: #b8b0a0;
+    --accent: #1a1a1a;
+    --accent2: #c0392b;
+    --accent3: #2563eb;
+    --accent4: #16a34a;
+    --text: #3a3530;
+    --text-dim: #7a7268;
+    --text-bright: #1a1a1a;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+    --code-green: #a6e3a1;
+    --code-blue: #89b4fa;
+    --code-yellow: #f9e2af;
+    --code-red: #f38ba8;
+    --code-purple: #cba6f7;
+    --code-comment: #585b70;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── LAYOUT ── */
+  .wrapper {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    min-height: 100vh;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    background: var(--accent);
+    color: #fff;
+    padding: 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sidebar-header {
+    padding: 32px 24px 24px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .sidebar-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 8px;
+  }
+
+  .sidebar-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+  }
+
+  .sidebar-ver {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
+    margin-top: 6px;
+  }
+
+  .sidebar-nav {
+    padding: 20px 0;
+    flex: 1;
+  }
+
+  .nav-section {
+    padding: 8px 24px 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.25);
+  }
+
+  .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 24px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    text-decoration: none;
+    transition: all 0.15s;
+    border-left: 2px solid transparent;
+  }
+
+  .nav-link:hover {
+    color: #fff;
+    border-left-color: rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.05);
+  }
+
+  .nav-link.active {
+    color: #fff;
+    border-left-color: #fff;
+    background: rgba(255,255,255,0.08);
+  }
+
+  .nav-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    flex-shrink: 0;
+  }
+
+  .sidebar-footer {
+    padding: 20px 24px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(255,255,255,0.25);
+    line-height: 1.6;
+  }
+
+  /* ── MAIN CONTENT ── */
+  main {
+    padding: 0;
+    background: var(--bg);
+  }
+
+  /* ── PAGE HEADER ── */
+  .page-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 48px 60px 40px;
+    animation: fadeIn 0.5s ease both;
+  }
+
+  .breadcrumb {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    margin-bottom: 20px;
+  }
+
+  .breadcrumb span { color: var(--text-bright); }
+
+  .page-title {
+    font-family: 'Instrument Serif', serif;
+    font-size: clamp(36px, 5vw, 52px);
+    font-weight: 400;
+    color: var(--text-bright);
+    line-height: 1.15;
+  }
+
+  .page-title em {
+    font-style: italic;
+    color: var(--text-dim);
+  }
+
+  .page-meta-row {
+    display: flex;
+    gap: 32px;
+    margin-top: 28px;
+    flex-wrap: wrap;
+  }
+
+  .page-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .meta-key {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .meta-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-bright);
+    font-weight: 500;
+  }
+
+  /* ── CONTENT SECTIONS ── */
+  .content {
+    padding: 0 60px 80px;
+  }
+
+  .doc-section {
+    padding-top: 56px;
+    animation: fadeIn 0.5s ease both;
+  }
+
+  .doc-section:first-child { padding-top: 56px; }
+
+  .section-anchor {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 28px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-idx {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .section-h {
+    font-family: 'Instrument Serif', serif;
+    font-size: 26px;
+    font-weight: 400;
+    color: var(--text-bright);
+  }
+
+  .section-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    margin-left: auto;
+  }
+
+  /* ── PROSE ── */
+  .prose {
+    font-size: 14px;
+    line-height: 1.75;
+    color: var(--text);
+    max-width: 680px;
+  }
+
+  .prose p { margin-bottom: 14px; }
+  .prose strong { color: var(--text-bright); font-weight: 700; }
+
+  .prose a {
+    color: var(--accent3);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(37,99,235,0.3);
+  }
+
+  /* ── CALLOUTS ── */
+  .callout {
+    border-left: 3px solid var(--border-dark);
+    background: var(--bg2);
+    padding: 16px 20px;
+    margin: 20px 0;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  .callout.warning { border-left-color: #d97706; }
+  .callout.info { border-left-color: var(--accent3); }
+  .callout.danger { border-left-color: var(--accent2); }
+  .callout.success { border-left-color: var(--accent4); }
+
+  .callout-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .callout.warning .callout-label { color: #d97706; }
+  .callout.info .callout-label { color: var(--accent3); }
+  .callout.danger .callout-label { color: var(--accent2); }
+  .callout.success .callout-label { color: var(--accent4); }
+
+  /* ── TECH CARDS ── */
+  .tech-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin: 24px 0;
+  }
+
+  .tech-card {
+    background: var(--surface);
+    padding: 20px;
+  }
+
+  .tech-card-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+
+  .tech-card-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-bright);
+  }
+
+  /* ── CODE BLOCK ── */
+  .code-block {
+    background: var(--code-bg);
+    border-radius: 2px;
+    margin: 20px 0;
+    overflow: hidden;
+  }
+
+  .code-header {
+    background: rgba(255,255,255,0.06);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .code-dots {
+    display: flex;
+    gap: 5px;
+  }
+
+  .code-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+  }
+
+  .code-filename {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
+    margin-left: 4px;
+  }
+
+  .code-body {
+    padding: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--code-text);
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  .c-k { color: var(--code-purple); }
+  .c-s { color: var(--code-green); }
+  .c-n { color: var(--code-blue); }
+  .c-v { color: var(--code-yellow); }
+  .c-c { color: var(--code-comment); font-style: italic; }
+  .c-r { color: var(--code-red); }
+
+  /* ── STATE SCHEMA TABLE ── */
+  .schema-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin: 20px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+
+  .schema-table th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    text-align: left;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+  }
+
+  .schema-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  .schema-table tr:last-child td { border-bottom: none; }
+  .schema-table tr:hover td { background: var(--bg2); }
+
+  .key-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent3);
+  }
+
+  .key-type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    background: var(--bg2);
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── FLOW STEPS ── */
+  .flow-steps {
+    margin: 24px 0;
+    position: relative;
+    padding-left: 24px;
+    border-left: 2px solid var(--border);
+  }
+
+  .flow-step {
+    margin-bottom: 24px;
+    position: relative;
+  }
+
+  .flow-step::before {
+    content: '';
+    position: absolute;
+    left: -30px;
+    top: 5px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--border-dark);
+  }
+
+  .flow-step-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+
+  .flow-step-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 4px;
+  }
+
+  .flow-step-desc {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .flow-step-desc code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: var(--bg2);
+    padding: 1px 5px;
+    border: 1px solid var(--border);
+    color: var(--accent2);
+  }
+
+  /* ── DEBT ITEMS ── */
+  .debt-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 24px 0;
+  }
+
+  .debt-item {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 16px;
+    align-items: start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px;
+  }
+
+  .debt-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--border-dark);
+    line-height: 1;
+  }
+
+  .debt-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 6px;
+  }
+
+  .debt-desc {
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--text);
+  }
+
+  .debt-desc code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: var(--bg2);
+    padding: 1px 5px;
+    border: 1px solid var(--border);
+    color: var(--accent2);
+  }
+
+  .debt-tags {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+
+  .debt-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .wrapper { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; }
+    .page-header, .content { padding-left: 28px; padding-right: 28px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-badge">Tech Documentation</div>
+      <div class="sidebar-title">[4x4]</div>
+      <div class="sidebar-ver">Alpha 21 · Release Candidate</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Overview</div>
+      <a class="nav-link active" href="#stack">
+        <span class="nav-dot"></span>Stack Tecnológico
+      </a>
+      <div class="nav-section">Arquitetura</div>
+      <a class="nav-link" href="#architecture">
+        <span class="nav-dot"></span>01 · Sistema Geral
+      </a>
+      <a class="nav-link" href="#state">
+        <span class="nav-dot"></span>02 · Gestão de Estado
+      </a>
+      <a class="nav-link" href="#fog">
+        <span class="nav-dot"></span>03 · Névoa de Guerra
+      </a>
+      <a class="nav-link" href="#combat">
+        <span class="nav-dot"></span>04 · Resolução de Combate
+      </a>
+      <div class="nav-section">Roadmap</div>
+      <a class="nav-link" href="#debt">
+        <span class="nav-dot"></span>05 · Débito Técnico
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      Vanilla JS · Firebase v10<br>
+      Host/Client · Serverless
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main>
+
+    <!-- PAGE HEADER -->
+    <div class="page-header" id="stack">
+      <div class="breadcrumb">[4x4] / <span>Tech Doc</span> / Alpha 21</div>
+      <h1 class="page-title">Documentação Técnica<br><em>Alpha 21 — Release Candidate</em></h1>
+      <div class="page-meta-row">
+        <div class="page-meta-item">
+          <div class="meta-key">Versão</div>
+          <div class="meta-val">Alpha 21</div>
+        </div>
+        <div class="page-meta-item">
+          <div class="meta-key">Stack</div>
+          <div class="meta-val">Vanilla JS (ES6+) · HTML5 · CSS3</div>
+        </div>
+        <div class="page-meta-item">
+          <div class="meta-key">Backend</div>
+          <div class="meta-val">Firebase Realtime DB (SDK v10)</div>
+        </div>
+        <div class="page-meta-item">
+          <div class="meta-key">Arquitetura de Rede</div>
+          <div class="meta-val">Pseudo-Authoritative Host/Client</div>
+        </div>
+      </div>
+      <div class="tech-cards" style="margin-top:32px;">
+        <div class="tech-card">
+          <div class="tech-card-label">Frontend</div>
+          <div class="tech-card-value">Vanilla JS ES6+</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-card-label">Realtime</div>
+          <div class="tech-card-value">Firebase RTDB</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-card-label">Protocolo</div>
+          <div class="tech-card-value">WebSockets</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-card-label">Paradigma</div>
+          <div class="tech-card-value">Serverless</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+
+      <!-- SECTION 1 -->
+      <div class="doc-section" id="architecture">
+        <div class="section-anchor">
+          <span class="section-idx">§01</span>
+          <h2 class="section-h">Arquitetura Geral do Sistema</h2>
+          <span class="section-tag">Network</span>
+        </div>
+
+        <div class="prose">
+          <p>O jogo opera de forma <strong>"Serverless"</strong> utilizando o Firebase Realtime Database como <strong>barramento de estado (State Bus)</strong>. Para contornar a falta de um backend customizado na fase Alpha, adota-se uma arquitetura onde <strong>o Jogador 1 (P1) atua como o Host Autoritativo</strong>.</p>
+        </div>
+
+        <div class="tech-cards" style="margin: 20px 0;">
+          <div class="tech-card">
+            <div class="tech-card-label">P1 — Host</div>
+            <div class="tech-card-value" style="font-size:11px;line-height:1.5;">Monitora inputs de ambos. Processa combate, visibilidade, colisões. Escreve a "Verdade Absoluta" no Firebase.</div>
+          </div>
+          <div class="tech-card">
+            <div class="tech-card-label">P2 — Client</div>
+            <div class="tech-card-value" style="font-size:11px;line-height:1.5;">Lê a UI baseada no estado Firebase. Empurra apenas seus inputs locais: <code style="font-size:10px;">target, skill, roll, ready</code>.</div>
+          </div>
+          <div class="tech-card">
+            <div class="tech-card-label">Firebase</div>
+            <div class="tech-card-value" style="font-size:11px;line-height:1.5;">Sincroniza estado via <code style="font-size:10px;">onValue</code> em tempo real. Ambos os clientes observam as mesmas mudanças.</div>
+          </div>
+        </div>
+
+        <div class="callout warning">
+          <div class="callout-label">⚠ Limitação Alpha</div>
+          Esta arquitetura coloca lógica de jogo no cliente P1, abrindo brecha para manipulação. Consulte a Seção 5 (Débito Técnico) para o plano de migração.
+        </div>
+      </div>
+
+      <!-- SECTION 2 -->
+      <div class="doc-section" id="state">
+        <div class="section-anchor">
+          <span class="section-idx">§02</span>
+          <h2 class="section-h">Gestão de Estado</h2>
+          <span class="section-tag">State Management</span>
+        </div>
+
+        <div class="prose">
+          <p>Todo o estado serializável do jogo reside no objeto <strong><code style="font-family:'JetBrains Mono',monospace;font-size:13px;background:var(--bg2);padding:2px 6px;border:1px solid var(--border);">window.S</code></strong>. O Firebase garante a sincronia em tempo real via <code style="font-family:'JetBrains Mono',monospace;font-size:12px;">onValue</code>.</p>
+        </div>
+
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dots">
+              <div class="code-dot"></div>
+              <div class="code-dot"></div>
+              <div class="code-dot"></div>
+            </div>
+            <span class="code-filename">window.S — JSON Schema (Parcial)</span>
+          </div>
+          <div class="code-body"><span class="c-c">// Estado global sincronizado via Firebase</span>
+<span class="c-k">window</span>.<span class="c-n">S</span> = {
+  <span class="c-n">players</span>: [                    <span class="c-c">// [0] = P1, [1] = P2</span>
+    {
+      <span class="c-n">pos</span>: [<span class="c-v">r</span>, <span class="c-v">c</span>],             <span class="c-c">// Array de posição [row, col]</span>
+      <span class="c-n">skill</span>: <span class="c-s">""</span>,              <span class="c-c">// "" | "BLOCK" | "TRAP" | "SPRINT"</span>
+      <span class="c-n">combatSkill</span>: <span class="c-s">""</span>,        <span class="c-c">// Snapshot no momento do processamento</span>
+      <span class="c-n">inv</span>: {
+        <span class="c-n">BLOCK</span>: <span class="c-v">int</span>,            <span class="c-c">// Quantidade restante</span>
+        <span class="c-n">TRAP</span>: <span class="c-v">int</span>,
+        <span class="c-n">SPRINT</span>: <span class="c-v">int</span>
+      },
+      <span class="c-n">permMod</span>: <span class="c-v">int</span>,            <span class="c-c">// Acumulador de Engine Building</span>
+      <span class="c-n">history</span>: [[<span class="c-v">r</span>,<span class="c-v">c</span>], ...]     <span class="c-c">// SVG de Aftermath</span>
+    }
+  ],
+  <span class="c-n">blocks</span>: [{ <span class="c-n">r</span>, <span class="c-n">c</span>, <span class="c-n">owner</span> }],  <span class="c-c">// Blocos no tabuleiro</span>
+  <span class="c-n">traps</span>: [{ <span class="c-n">r</span>, <span class="c-n">c</span>, <span class="c-n">owner</span> }],   <span class="c-c">// Armadilhas (invisíveis ao oponente)</span>
+  <span class="c-n">spentRes</span>: [                  <span class="c-c">// Cemitério de recursos</span>
+    { <span class="c-n">r</span>, <span class="c-n">c</span>, <span class="c-n">type</span>, <span class="c-n">owner</span>, <span class="c-n">status</span> }
+    <span class="c-c">// status: wasted | broken | triggered | jumped</span>
+  ],
+  <span class="c-n">phase</span>: <span class="c-s">"planning"</span>            <span class="c-c">// State Machine: "planning" | "combat"</span>
+}</div>
+        </div>
+
+        <table class="schema-table">
+          <thead>
+            <tr>
+              <th>Campo</th>
+              <th>Tipo</th>
+              <th>Descrição</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="key-name">players[n].permMod</span></td>
+              <td><span class="key-type">int</span></td>
+              <td>Acumulador de modificadores permanentes (Engine Building). Soma de todos os recursos gastos.</td>
+            </tr>
+            <tr>
+              <td><span class="key-name">players[n].history</span></td>
+              <td><span class="key-type">Array&lt;[r,c]&gt;</span></td>
+              <td>Histórico de posições para renderização do trajeto no SVG de Aftermath.</td>
+            </tr>
+            <tr>
+              <td><span class="key-name">spentRes[n].status</span></td>
+              <td><span class="key-type">string enum</span></td>
+              <td><code style="font-family:'JetBrains Mono',monospace;font-size:10px;">wasted</code> · <code style="font-family:'JetBrains Mono',monospace;font-size:10px;">broken</code> · <code style="font-family:'JetBrains Mono',monospace;font-size:10px;">triggered</code> · <code style="font-family:'JetBrains Mono',monospace;font-size:10px;">jumped</code>. Usado para UX no Aftermath.</td>
+            </tr>
+            <tr>
+              <td><span class="key-name">phase</span></td>
+              <td><span class="key-type">string</span></td>
+              <td>Controle da State Machine principal. Valores: <code style="font-family:'JetBrains Mono',monospace;font-size:10px;">"planning"</code> e <code style="font-family:'JetBrains Mono',monospace;font-size:10px;">"combat"</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- SECTION 3 -->
+      <div class="doc-section" id="fog">
+        <div class="section-anchor">
+          <span class="section-idx">§03</span>
+          <h2 class="section-h">Lógica de Névoa de Guerra</h2>
+          <span class="section-tag">Fog of War</span>
+        </div>
+
+        <div class="prose">
+          <p>Calculada puramente no Frontend (Client-side) na função <strong><code style="font-family:'JetBrains Mono',monospace;font-size:12px;">renderBoard()</code></strong>. Distância ortogonal via Manhattan Distance.</p>
+        </div>
+
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dots">
+              <div class="code-dot"></div>
+              <div class="code-dot"></div>
+              <div class="code-dot"></div>
+            </div>
+            <span class="code-filename">renderBoard() — Fog of War Logic</span>
+          </div>
+          <div class="code-body"><span class="c-c">// Manhattan Distance: distância ortogonal</span>
+<span class="c-k">const</span> <span class="c-n">dist</span> = <span class="c-n">Math</span>.<span class="c-v">abs</span>(<span class="c-n">r</span> - <span class="c-v">me</span>.<span class="c-n">pos</span>[<span class="c-v">0</span>]) + <span class="c-n">Math</span>.<span class="c-v">abs</span>(<span class="c-n">c</span> - <span class="c-v">me</span>.<span class="c-n">pos</span>[<span class="c-v">1</span>]);
+
+<span class="c-c">// Aplica névoa se além da distância 1 (exceto alvos de SPRINT)</span>
+<span class="c-k">if</span> (<span class="c-n">dist</span> > <span class="c-v">1</span> && !<span class="c-n">isSprintTarget</span>) {
+  <span class="c-n">cell</span>.<span class="c-v">classList</span>.<span class="c-n">add</span>(<span class="c-s">'fog'</span>);
+}
+
+<span class="c-c">// Filtra entidades inimigas e Traps por propriedade</span>
+<span class="c-k">const</span> <span class="c-n">visibleTraps</span> = <span class="c-v">S</span>.<span class="c-n">traps</span>.<span class="c-v">filter</span>(
+  <span class="c-n">t</span> => <span class="c-n">t</span>.<span class="c-v">owner</span> === <span class="c-n">window</span>.<span class="c-v">myId</span>  <span class="c-c">// Só mostra suas próprias traps</span>
+);</div>
+        </div>
+
+        <div class="callout danger">
+          <div class="callout-label">🔴 Vulnerabilidade de Segurança</div>
+          A Fog of War é aplicada apenas na UI — o Firebase entrega o objeto <code style="font-family:'JetBrains Mono',monospace;font-size:11px;">S</code> completo para ambos os jogadores. Posições das armadilhas ocultas do adversário são visíveis via DevTools. Resolução planejada na migração para Backend Real (§05).
+        </div>
+      </div>
+
+      <!-- SECTION 4 -->
+      <div class="doc-section" id="combat">
+        <div class="section-anchor">
+          <span class="section-idx">§04</span>
+          <h2 class="section-h">Resolução de Combate</h2>
+          <span class="section-tag">Combat Flow</span>
+        </div>
+
+        <div class="prose">
+          <p>O combate é <strong>segmentado em fases assíncronas</strong> para permitir feedback visual de rolagem de dados, respeitando o timing percebido pelo jogador.</p>
+        </div>
+
+        <div class="flow-steps">
+          <div class="flow-step">
+            <div class="flow-step-num">PASSO 01</div>
+            <div class="flow-step-title">Trigger de Colisão</div>
+            <p class="flow-step-desc"><code>hostProcessTurn()</code> detecta colisão de destinos (<code>same && !arrEq(p1.target, p1.pos)</code>). Muda <code>phase</code> para <code>"combat"</code>.</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-step-num">PASSO 02</div>
+            <div class="flow-step-title">Rolagem de Dados</div>
+            <p class="flow-step-desc">Jogadores enviam seu D6 via <code>rollDie()</code>. Ambos aguardam o outro completar antes do processamento.</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-step-num">PASSO 03</div>
+            <div class="flow-step-title">Delay de UX</div>
+            <p class="flow-step-desc">Host detecta ambos <code>roll > 0</code> e engatilha <code>setTimeout</code> de <strong>2.8s</strong> para visualização da matemática na UI — tensão dramática intencional.</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-step-num">PASSO 04</div>
+            <div class="flow-step-title">Resolução Final</div>
+            <p class="flow-step-desc"><code>hostResolveCombat()</code> computa <code>roll + permMod + turnMod</code>. Em <strong>empate</strong>: <code>ready</code> resetado, itens não consumidos. Em <strong>vitória</strong>: move vencedor, consome itens, aumenta <code>permMod</code> de ambos, registra falhas no <code>spentRes</code>.</p>
+          </div>
+        </div>
+
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dots">
+              <div class="code-dot"></div>
+              <div class="code-dot"></div>
+              <div class="code-dot"></div>
+            </div>
+            <span class="code-filename">hostResolveCombat() — Score Calculation</span>
+          </div>
+          <div class="code-body"><span class="c-k">const</span> <span class="c-n">score</span> = (<span class="c-n">p</span>) => <span class="c-n">p</span>.<span class="c-v">roll</span> + <span class="c-n">p</span>.<span class="c-v">permMod</span> + <span class="c-n">p</span>.<span class="c-v">turnMod</span>;
+
+<span class="c-k">if</span> (<span class="c-n">score</span>(<span class="c-v">p1</span>) === <span class="c-n">score</span>(<span class="c-v">p2</span>)) {
+  <span class="c-c">// Empate — nenhum item consumido</span>
+  <span class="c-n">resetReady</span>();
+} <span class="c-k">else</span> {
+  <span class="c-k">const</span> <span class="c-n">winner</span> = <span class="c-n">score</span>(<span class="c-v">p1</span>) > <span class="c-n">score</span>(<span class="c-v">p2</span>) ? <span class="c-v">p1</span> : <span class="c-v">p2</span>;
+  <span class="c-n">movePlayer</span>(<span class="c-n">winner</span>);
+  <span class="c-n">consumeItems</span>([<span class="c-v">p1</span>, <span class="c-v">p2</span>]);    <span class="c-c">// Ambos perdem o item usado</span>
+  <span class="c-n">incrementPermMod</span>([<span class="c-v">p1</span>, <span class="c-v">p2</span>]); <span class="c-c">// Engine Building acumula</span>
+  <span class="c-n">logSpentRes</span>(<span class="c-n">loser</span>);         <span class="c-c">// Cemitério para Aftermath</span>
+}</div>
+        </div>
+      </div>
+
+      <!-- SECTION 5 -->
+      <div class="doc-section" id="debt">
+        <div class="section-anchor">
+          <span class="section-idx">§05</span>
+          <h2 class="section-h">Escalabilidade &amp; Débito Técnico</h2>
+          <span class="section-tag">Roadmap Alpha → Beta</span>
+        </div>
+
+        <div class="prose">
+          <p>Para escalar de Alpha para Beta/Produção comercial, as seguintes refatorações arquiteturais são recomendadas para o Tech Director responsável pela transição.</p>
+        </div>
+
+        <div class="debt-list">
+          <div class="debt-item">
+            <div class="debt-num">01</div>
+            <div>
+              <div class="debt-title">Migração para Servidor Autoritário Real</div>
+              <p class="debt-desc">Atualmente, P1 processa a lógica de jogo — abre brecha para trapaça via manipulação de cliente. Substituir por servidor <code>Node.js</code> utilizando <code>Colyseus</code> ou <code>Nakama</code> como runtime de jogo autoritativo.</p>
+              <div class="debt-tags">
+                <span class="debt-tag">Segurança</span>
+                <span class="debt-tag">Alta Prioridade</span>
+                <span class="debt-tag">Node.js</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="debt-item">
+            <div class="debt-num">02</div>
+            <div>
+              <div class="debt-title">Separação State / View</div>
+              <p class="debt-desc">Substituir a manipulação de DOM procedural (<code>innerHTML</code>, <code>appendChild</code>) por um framework reativo como <code>React</code>, <code>Vue</code> ou <code>Svelte</code>. Alternativa: portar lógica de jogo para Unity/Godot, aproveitando o GDD e as regras amplamente testadas no código Vanilla.</p>
+              <div class="debt-tags">
+                <span class="debt-tag">Arquitetura</span>
+                <span class="debt-tag">Manutenibilidade</span>
+                <span class="debt-tag">React / Godot</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="debt-item">
+            <div class="debt-num">03</div>
+            <div>
+              <div class="debt-title">Cullagem de Dados (Data Culling)</div>
+              <p class="debt-desc">Atualmente, o Firebase entrega o objeto <code>S</code> completo para ambos os jogadores — incluindo posições das armadilhas ocultas do adversário (visíveis via DevTools). O Backend futuro deverá retornar <strong>Payloads parciais</strong> específicos para P1 e P2, com a Fog of War aplicada server-side.</p>
+              <div class="debt-tags">
+                <span class="debt-tag">Segurança</span>
+                <span class="debt-tag">Fog of War</span>
+                <span class="debt-tag">Server-side</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout success">
+          <div class="callout-label">✅ Estado Alpha</div>
+          A Alpha 21 está em estado de Release Candidate: todas as mecânicas de GDD implementadas, testadas e funcionais. O débito técnico acima não bloqueia apresentações, demos ou testes de produto com usuários reais.
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </main>
+</div>
+
+<script>
+  // Active nav link on scroll
+  const links = document.querySelectorAll('.nav-link');
+  const sections = document.querySelectorAll('.doc-section, #stack');
+  
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const id = entry.target.id;
+        const active = document.querySelector(`.nav-link[href="#${id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { threshold: 0.3 });
+
+  sections.forEach(s => observer.observe(s));
+
+  // Smooth scroll for sidebar links
+  links.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const target = document.querySelector(link.getAttribute('href'));
+      if (target) target.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+</script>
+</body>
+</html>
