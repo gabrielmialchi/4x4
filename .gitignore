@@ -1,0 +1,86 @@
+# ============================================================
+# 4x4 — .gitignore
+# Cobre stack atual (vanilla JS + Firebase) e futuro (Node + Socket.io de SEC-001)
+# ============================================================
+
+# --- Node.js ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.yarn/
+.pnp.*
+
+# --- Variáveis de ambiente / segredos ---
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+*.pem
+*.key
+secrets.json
+firebase-config.local.json
+
+# --- Firebase (artefatos locais; firebase.json e .firebaserc geralmente são comitados) ---
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+.runtimeconfig.json
+
+# --- Builds / outputs ---
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# --- Logs ---
+logs/
+*.log
+pids/
+*.pid
+*.seed
+
+# --- Cache ---
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+
+# --- Testes / coverage ---
+coverage/
+.nyc_output/
+*.lcov
+
+# --- IDE ---
+.vscode/
+!.vscode/settings.json.example
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# --- Claude Code (memória local não vai pro repo; agentes e CLAUDE.md vão) ---
+.claude/settings.local.json
+
+# --- Temporários ---
+*.tmp
+*.temp
+*.bak
+*.orig

@@ -1,0 +1,458 @@
+:root {
+    /* ── core / surfaces / text ─────────────────────── */
+    --bg:       #04030a;
+    --surf:     #0a0914;
+    --surf2:    #0f0e1a;
+    --bdr:      #1a1828;
+    --bdr2:     #2e2a45;
+    --text:     #ddd6f3;
+    --dim:      #5a5470;
+
+    /* ── players ────────────────────────────────────── */
+    --p1:       #3b8fef;
+    --p2:       #ef3b3b;
+    --gp1:      rgba(59,143,239,.35);
+    --gp2:      rgba(239,59,59,.35);
+    --p1-highlight: rgba(130,200,255,.5);
+    --p2-highlight: rgba(255,130,130,.5);
+
+    /* ── semantic ───────────────────────────────────── */
+    --trap:     #9333ea;
+    --combat:   #f5a623;
+    --gold:     #c8a84b;
+    --btn-active: #22c55e;
+
+    /* ── contextual surfaces ────────────────────────── */
+    --fog-bg:    #02020a;
+    --fog-bdr:   #08070f;
+    --sprint-bg: #110d03;
+    --combat-bg: #010008;
+    --log-bg:    #020108;
+
+    /* ── shadows / overlays ─────────────────────────── */
+    --shadow-heavy:    rgba(0,0,0,.8);
+    --shadow-medium:   rgba(0,0,0,.6);
+    --shadow-light:    rgba(0,0,0,.4);
+    --scanline:        rgba(255,255,255,.012);
+    --scanline-combat: rgba(255,255,255,.018);
+
+    /* ── piece details ──────────────────────────────── */
+    --piece-ring:    rgba(255,255,255,.18);
+    --piece-diamond: rgba(255,255,255,.35);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Rajdhani',sans-serif;
+    user-select:none;
+}
+
+/* atmospheric bg gradient */
+body::before{
+    content:'';
+    position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:
+        radial-gradient(ellipse 70% 50% at 15% 90%,color-mix(in srgb, var(--p1) 5%, transparent) 0%,transparent 60%),
+        radial-gradient(ellipse 70% 50% at 85% 10%,color-mix(in srgb, var(--p2) 5%, transparent) 0%,transparent 60%);
+}
+
+/* scanline overlay */
+body::after{
+    content:'';
+    position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:repeating-linear-gradient(
+        0deg,
+        transparent,transparent 2px,
+        var(--scanline) 2px,var(--scanline) 4px
+    );
+}
+
+/* ─── LOBBY ───────────────────────────────────────── */
+#lobby-screen{
+    position:fixed;inset:0;
+    background:var(--bg);
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    gap:22px;z-index:6000;
+    text-align:center;padding:40px;
+}
+.lobby-title{
+    font-family:'Cinzel',serif;
+    font-size:clamp(28px,6vw,48px);
+    font-weight:900;
+    letter-spacing:8px;
+    color:var(--text);
+}
+.lobby-title em{color:var(--p1);font-style:normal}
+.lobby-sub{
+    font-size:11px;letter-spacing:5px;
+    text-transform:uppercase;color:var(--dim);
+}
+.gold-line{
+    width:100px;height:1px;
+    background:linear-gradient(90deg,transparent,var(--gold),transparent);
+}
+.link-box{
+    background:var(--surf2);
+    padding:14px 20px;border-radius:3px;
+    font-family:'Share Tech Mono',monospace;
+    color:var(--gold);cursor:pointer;
+    border:1px solid var(--bdr2);
+    word-break:break-all;max-width:90%;
+    font-size:12px;letter-spacing:1px;
+    transition:border-color .2s;
+}
+.link-box:hover{border-color:var(--gold)}
+
+/* ─── GAME CONTAINER ──────────────────────────────── */
+#game-container{
+    display:flex;
+    width:100vw;height:82vh;
+    align-items:center;justify-content:center;
+    position:relative;z-index:1;
+}
+.player-section{
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+}
+#player-title{
+    font-family:'Cinzel',serif;
+    font-size:14px;
+    letter-spacing:6px;
+    text-transform:uppercase;
+    margin-bottom:18px;
+    font-weight:700;
+}
+
+/* ─── GRID ────────────────────────────────────────── */
+.grid-wrapper{position:relative}
+.grid{
+    display:grid;
+    grid-template-columns:repeat(4,75px);
+    grid-template-rows:repeat(4,75px);
+    gap:8px;padding:14px;
+    background:var(--surf);
+    border-radius:5px;
+    border:1px solid var(--bdr2);
+    box-shadow:0 0 80px var(--shadow-heavy),inset 0 0 40px var(--shadow-light);
+}
+.pieces-layer{
+    position:absolute;top:0;left:0;
+    width:100%;height:100%;
+    pointer-events:none;
+}
+.cell{
+    width:75px;height:75px;
+    background:var(--surf2);
+    border-radius:3px;
+    border:1px solid var(--bdr);
+    display:flex;align-items:center;justify-content:center;
+    position:relative;
+    transition:border-color .18s,box-shadow .18s;
+}
+.cell.fog{background:var(--fog-bg)!important;border-color:var(--fog-bdr)!important}
+.cell.clickable{border-color:var(--bdr2);cursor:pointer}
+.cell.clickable:hover{border-color:var(--gold);box-shadow:inset 0 0 14px color-mix(in srgb, var(--gold) 12%, transparent)}
+.cell.sprint-target{
+    background:var(--sprint-bg)!important;
+    border-color:var(--combat)!important;
+    box-shadow:inset 0 0 18px color-mix(in srgb, var(--combat) 18%, transparent)!important;
+}
+.cell.selected{
+    border-color:var(--gold)!important;
+    box-shadow:inset 0 0 18px color-mix(in srgb, var(--gold) 22%, transparent)!important;
+}
+.cell-combat{
+    border:1px solid var(--combat)!important;
+    box-shadow:inset 0 0 14px color-mix(in srgb, var(--combat) 18%, transparent)!important;
+}
+.broken{opacity:.35;text-decoration:line-through;filter:saturate(.25)}
+
+/* ─── PIECE ───────────────────────────────────────── */
+.piece{
+    width:50px;height:50px;
+    border-radius:50%;
+    position:absolute;
+    transition:all .45s cubic-bezier(.4,0,.2,1);
+    z-index:100;
+}
+/* inner ring + diamond clan mark */
+.piece::before{
+    content:'';position:absolute;inset:4px;
+    border-radius:50%;
+    border:1px solid var(--piece-ring);
+}
+.piece::after{
+    content:'';position:absolute;
+    width:14px;height:14px;
+    border:2px solid var(--piece-diamond);
+    transform:rotate(45deg);
+}
+.p1-piece{
+    background:radial-gradient(circle at 35% 35%,var(--p1-highlight),var(--p1));
+    box-shadow:0 0 22px var(--gp1),0 3px 10px var(--shadow-medium);
+}
+.p2-piece{
+    background:radial-gradient(circle at 35% 35%,var(--p2-highlight),var(--p2));
+    box-shadow:0 0 22px var(--gp2),0 3px 10px var(--shadow-medium);
+}
+.trapped{
+    border:2px solid var(--trap)!important;
+    box-shadow:0 0 32px var(--trap),0 0 64px color-mix(in srgb, var(--trap) 25%, transparent)!important;
+    animation:trap-pulse .35s ease-in-out infinite alternate;
+}
+@keyframes trap-pulse{
+    from{transform:scale(1) rotate(0deg)}
+    to{transform:scale(1.06) rotate(4deg)}
+}
+
+/* ─── CONTROLS ────────────────────────────────────── */
+.controls{
+    margin-top:20px;
+    display:flex;gap:8px;
+    flex-wrap:wrap;justify-content:center;
+}
+button{
+    padding:10px 18px;
+    border:1px solid var(--bdr2);
+    border-radius:3px;
+    background:transparent;
+    color:var(--dim);
+    font-family:'Rajdhani',sans-serif;
+    font-weight:700;font-size:12px;
+    letter-spacing:2.5px;text-transform:uppercase;
+    cursor:pointer;
+    transition:all .18s;
+}
+button:hover:not(:disabled){
+    border-color:var(--gold);color:var(--gold);
+    background:color-mix(in srgb, var(--gold) 5%, transparent);
+}
+button.active{
+    border-color:var(--btn-active);color:var(--btn-active);
+    background:color-mix(in srgb, var(--btn-active) 7%, transparent);
+}
+button#btn-ready{
+    border-color:var(--gold);color:var(--gold);
+    background:color-mix(in srgb, var(--gold) 6%, transparent);
+    font-size:13px;padding:12px 26px;letter-spacing:3px;
+}
+button#btn-ready:hover:not(:disabled){
+    background:color-mix(in srgb, var(--gold) 16%, transparent);
+    box-shadow:0 0 22px color-mix(in srgb, var(--gold) 18%, transparent);
+}
+button:disabled{opacity:.12;cursor:default}
+#status-text{
+    margin-top:14px;
+    color:var(--dim);font-size:11px;
+    letter-spacing:2.5px;text-transform:uppercase;
+    font-family:'Share Tech Mono',monospace;
+}
+
+/* ─── COMBAT OVERLAY ──────────────────────────────── */
+#combat-overlay{
+    position:fixed;inset:0;
+    background:var(--combat-bg);
+    display:none;
+    flex-direction:column;
+    align-items:center;justify-content:center;
+    gap:0;z-index:5000;
+    overflow:hidden;
+}
+
+/* edge atmospheric glow */
+#combat-overlay::before{
+    content:'';position:absolute;inset:0;pointer-events:none;
+    background:
+        radial-gradient(ellipse 90% 45% at 50% 0%,color-mix(in srgb, var(--p2) 10%, transparent) 0%,transparent 55%),
+        radial-gradient(ellipse 90% 45% at 50% 100%,color-mix(in srgb, var(--p1) 8%, transparent) 0%,transparent 55%),
+        radial-gradient(ellipse 30% 80% at 0% 50%,color-mix(in srgb, var(--trap) 4%, transparent) 0%,transparent 50%),
+        radial-gradient(ellipse 30% 80% at 100% 50%,color-mix(in srgb, var(--trap) 4%, transparent) 0%,transparent 50%);
+}
+
+/* scanlines on combat */
+#combat-overlay::after{
+    content:'';position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(
+        0deg,
+        transparent,transparent 3px,
+        var(--scanline-combat) 3px,var(--scanline-combat) 6px
+    );
+}
+
+#combat-title{
+    font-family:'Cinzel',serif;
+    font-size:clamp(24px,5vw,42px);
+    font-weight:900;letter-spacing:14px;
+    text-transform:uppercase;
+    color:var(--combat);
+    text-shadow:0 0 40px color-mix(in srgb, var(--combat) 55%, transparent),0 0 90px color-mix(in srgb, var(--combat) 18%, transparent);
+    margin-bottom:8px;
+    animation:title-flicker 5s ease-in-out infinite;
+    position:relative;z-index:1;
+}
+@keyframes title-flicker{
+    0%,89%,91%,93%,100%{opacity:1}
+    90%{opacity:.6}
+    92%{opacity:.9}
+}
+
+.combat-divider{
+    width:180px;height:1px;
+    background:linear-gradient(90deg,transparent,var(--gold) 40%,var(--gold) 60%,transparent);
+    margin-bottom:32px;
+    position:relative;z-index:1;
+}
+.combat-divider::before,.combat-divider::after{
+    content:'◆';
+    position:absolute;top:-6px;
+    color:var(--gold);font-size:8px;
+}
+.combat-divider::before{left:calc(50% - 4px)}
+
+.combat-arena{
+    display:flex;gap:48px;
+    align-items:flex-start;
+    position:relative;z-index:1;
+}
+
+/* VS separator */
+.combat-vs{
+    font-family:'Cinzel',serif;
+    font-size:14px;
+    color:var(--dim);
+    letter-spacing:4px;
+    display:flex;flex-direction:column;
+    align-items:center;gap:10px;
+    padding-top:72px;
+}
+.combat-vs::before,.combat-vs::after{
+    content:'';display:block;
+    width:1px;height:36px;
+}
+.combat-vs::before{background:linear-gradient(180deg,transparent,var(--bdr2))}
+.combat-vs::after{background:linear-gradient(180deg,var(--bdr2),transparent)}
+
+.die-wrap{text-align:center;width:140px}
+.die-label{
+    font-family:'Cinzel',serif;
+    font-size:11px;letter-spacing:5px;
+    margin-bottom:14px;font-weight:700;
+    text-transform:uppercase;
+}
+
+/* THE DICE */
+.die{
+    width:110px;height:110px;
+    background:var(--surf);
+    border:1px solid var(--bdr2);
+    border-radius:10px;
+    font-size:76px;
+    line-height:1;
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;margin:0 auto;
+    transition:border-color .2s,box-shadow .2s,transform .1s;
+    position:relative;
+    font-family:'Share Tech Mono',monospace;
+    color:var(--text);
+}
+.die.idle{
+    border-color:var(--bdr2);
+    animation:die-idle 3s ease-in-out infinite;
+}
+@keyframes die-idle{
+    0%,100%{box-shadow:0 0 0px transparent}
+    50%{box-shadow:0 0 18px color-mix(in srgb, var(--gold) 8%, transparent)}
+}
+.die.rolling{
+    animation:die-rattle .08s linear infinite;
+    border-color:var(--combat);
+    box-shadow:0 0 30px color-mix(in srgb, var(--combat) 20%, transparent);
+}
+@keyframes die-rattle{
+    0%{transform:translate(0,0) rotate(0deg)}
+    20%{transform:translate(3px,-2px) rotate(3deg)}
+    40%{transform:translate(-3px,2px) rotate(-3deg)}
+    60%{transform:translate(2px,3px) rotate(2deg)}
+    80%{transform:translate(-2px,-2px) rotate(-2deg)}
+    100%{transform:translate(1px,1px) rotate(1deg)}
+}
+.die.landed{
+    animation:die-land .28s cubic-bezier(.36,.07,.19,.97) forwards;
+}
+@keyframes die-land{
+    0%{transform:scale(1.25) rotate(-8deg)}
+    60%{transform:scale(.95)}
+    100%{transform:scale(1) rotate(0deg)}
+}
+
+.die-hint{
+    font-size:10px;color:var(--dim);
+    letter-spacing:2px;text-transform:uppercase;
+    margin-top:8px;height:14px;
+    font-family:'Share Tech Mono',monospace;
+    animation:hint-blink 2.2s ease-in-out infinite;
+}
+@keyframes hint-blink{0%,100%{opacity:.3}50%{opacity:.85}}
+
+.die-math{
+    font-family:'Share Tech Mono',monospace;
+    font-size:16px;font-weight:bold;
+    margin-top:12px;height:20px;
+    color:var(--text);letter-spacing:1px;
+}
+#combat-result{
+    font-family:'Cinzel',serif;
+    font-size:16px;font-weight:700;
+    letter-spacing:5px;
+    height:26px;margin-top:28px;
+    text-align:center;
+    position:relative;z-index:1;
+}
+
+/* ─── REVIEW SCREEN ───────────────────────────────── */
+#review-screen{
+    position:fixed;inset:0;
+    background:var(--bg);
+    display:none;
+    flex-direction:column;
+    align-items:center;justify-content:center;
+    gap:18px;z-index:4000;
+}
+#winner-text{
+    font-family:'Cinzel',serif;
+    font-size:clamp(30px,6vw,54px);
+    font-weight:900;letter-spacing:10px;
+}
+#review-screen .grid{pointer-events:none}
+.legend-text{
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px;color:var(--dim);
+    text-align:center;line-height:2;
+    letter-spacing:1px;
+}
+
+/* ─── LOG ─────────────────────────────────────────── */
+#log{
+    height:18vh;
+    background:var(--log-bg);
+    color:color-mix(in srgb, var(--gold) 45%, transparent);
+    border-top:1px solid var(--bdr);
+    padding:10px 14px;
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px;letter-spacing:.5px;
+    overflow-y:auto;
+    position:relative;z-index:1;
+}
+
+/* ─── MOBILE ──────────────────────────────────────── */
+@media(max-width:600px){
+    .grid{grid-template-columns:repeat(4,62px);grid-template-rows:repeat(4,62px);gap:6px}
+    .cell{width:62px;height:62px}
+    .piece{width:42px;height:42px}
+    .die{width:90px;height:90px;font-size:60px}
+    .combat-arena{gap:24px}
+    .die-wrap{width:110px}
+}
