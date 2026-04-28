@@ -785,3 +785,30 @@ ui.js          (~250 linhas)  — syncUI, renderBoard, screens, handlers
   - URL final do server (ex: `https://4x4.up.railway.app`)
   - Decisão sobre cliente: continuar local enquanto Alpha, ou já publicar no itch.io junto?
 - **Pergunta de produto sobre regra de empate 4v4** (PROTO_SOCKET §10) ainda pendente — segue como decisão ao chegar em MODE-001.2
+
+---
+
+## 2026-04-28 Sessão SEC-001.10 — USE_SERVER=true permanente
+**Status:** Completo
+**Branch:** —
+
+### Decisões de produto registradas
+- **SEC-001.9 pulada** (decisão Gerente): paridade não foi validada via roteiro. Firebase continua vivo como rede de segurança até SEC-001.11. Risco aceito: divergências, se houver, aparecem em produção; correção pontual se reportada
+- **Server hospedado no Railway** em `https://4x4-production.up.railway.app` (HTTPS automático)
+- **Cliente hospedado no itch.io** em `https://o6games.itch.io/4x4-game` (página restricted; Alpha 2.2_Visual antiga removida pelo Gerente para não conflitar)
+
+### Feito
+- [server/server.js](../server/server.js): CORS `isAllowedOrigin` agora aceita `*.itch.zone` além de `*.itch.io`. itch.zone é o domínio do iframe HTML5 do itch.io (separado por design); sem essa regra, o jogo embutido recebia `connect_error`
+- [html/network.js](../html/network.js): `USE_SERVER` promovido de `false` para `true`. `SERVER_URL` trocado de `http://localhost:3000` para `https://4x4-production.up.railway.app`. Comentários atualizados refletindo a promoção
+
+### Validação
+- `node --check` passou em server.js e network.js
+
+### Dependências externas (Gabriel cuida)
+- **Push do commit pro Railway** — Railway redeploy automático ao detectar novo commit no branch conectado. Confirmar que server `[server] listening on :PORT` aparece nos logs após push
+- **ZIP do `html/`** pra upload no itch.io — Gabriel monta e sobe pelo painel do itch.io. Conteúdo: `index.html` na raiz do ZIP + `style.css` + `gameState.js` + `network.js` + `combat.js` + `ui.js` + `validators.js`
+
+### Notas para próxima sessão
+- Próxima na ordem: **SEC-001.11** — descontinuar Firebase (remover SDK, paths, listeners, chave). Quando esta sub rodar, o caminho `initFirebaseMode` em network.js sai inteiro, junto com `firebaseConfig`, imports do firebase, e os exports `db`/`ref`/`set`/`onValue`/`get`/`update`. Ataca o vazamento original da chave (alerta GitHub de 2026-04-26) na raiz: a chave deixa de existir no código vivo
+- **Pré-requisito de produto pra SEC-001.11**: confirmar que o Railway está estável após uns dias de uso. Se houver problema crítico, reverter `USE_SERVER` pra `false` é trivial (1 linha) — desde que Firebase continue vivo. SEC-001.11 fecha a porta de saída
+- **Atenção:** verificar fim a fim antes de SEC-001.11. Cenários: criar sala no itch.io, copiar URL, abrir em outro dispositivo/aba, jogar uma partida completa. Se algo não funcionar, vira correção dentro de SEC-001.10 (não nova sub)

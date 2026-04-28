@@ -44,13 +44,16 @@ app.use("/jogo", express.static(path.join(__dirname, "..", "html")));
 
 const server = http.createServer(app);
 
-// CORS: dev local (qualquer porta) + itch.io publicado. Outros origins ficam de fora.
+// CORS: dev local (qualquer porta) + itch.io publicado. itch.zone é o domínio do iframe
+// HTML5 player do itch.io (separado de itch.io por design) — sem ele, o jogo embutido
+// no itch.io recebe connect_error.
 function isAllowedOrigin(origin) {
   if (!origin) return true; // requests sem header Origin (mesmo host, curl) passam
   return (
     /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
     /^https:\/\/itch\.io$/.test(origin) ||
-    /^https:\/\/[^/]+\.itch\.io$/.test(origin)
+    /^https:\/\/[^/]+\.itch\.io$/.test(origin) ||
+    /^https:\/\/[^/]+\.itch\.zone$/.test(origin)
   );
 }
 

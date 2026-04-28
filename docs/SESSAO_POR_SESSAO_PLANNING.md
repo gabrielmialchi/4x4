@@ -43,8 +43,8 @@ Backlog organizado em **Macro Tarefas** (épicos) com **sub-sessões** numeradas
 | 24 | SEC-001.6 | ✅ | Backend — endgame + condição de vitória |
 | 25 | SEC-001.7 | ✅ | Backend — data culling (`state_for_me`) |
 | 26 | SEC-001.8 | ✅ | Cliente — flag `USE_SERVER` em network.js |
-| 27 | SEC-001.9 | 🔄 | Validação de paridade Firebase ↔ Server (roteiro pronto, aguarda Gabriel rodar) |
-| 28 | SEC-001.10 | ⏳ | Promoção: `USE_SERVER=true` permanente |
+| 27 | SEC-001.9 | ⏸ | Validação de paridade Firebase ↔ Server (pulada por decisão do Gerente em 2026-04-28; Firebase ainda vivo até SEC-001.11 como rede de segurança) |
+| 28 | SEC-001.10 | ✅ | Promoção: `USE_SERVER=true` permanente |
 | 29 | SEC-001.11 | ⏳ | Descontinuar Firebase |
 | 30 | SEC-001.12 | ⏳ | Hardening: rate limit, validação, graceful shutdown |
 | 31 | MATCH-001.1 | ⏳ | Matchmaking — Private Room no server (código ABCD) |
@@ -100,8 +100,8 @@ Backlog organizado em **Macro Tarefas** (épicos) com **sub-sessões** numeradas
 | SEC-001.6 | ✅ | Endgame + condição de vitória (diagonal por slot — preparada para 4v4 desde o início) (concluído 2026-04-27) |
 | SEC-001.7 | ✅ | Data culling: server envia `state_for_me` específico por destinatário (concluído 2026-04-27) |
 | SEC-001.8 | ✅ | Adicionar flag `USE_SERVER` em `network.js`; em `true`, cliente conecta ao server (concluído 2026-04-28) |
-| SEC-001.9 | 🔄 | Validação de paridade Firebase ↔ Server (smoke test alternando flag) (roteiro 2026-04-28) |
-| SEC-001.10 | ⏳ | Promoção: `USE_SERVER=true` permanente |
+| SEC-001.9 | ⏸ | Validação de paridade Firebase ↔ Server (smoke test alternando flag) (pulada 2026-04-28 — roteiro pronto em PARIDADE_REPORT.md, revisitar se bug aparecer) |
+| SEC-001.10 | ✅ | Promoção: `USE_SERVER=true` permanente (concluído 2026-04-28 — server no Railway, cliente no itch.io) |
 | SEC-001.11 | ⏳ | Descontinuar Firebase (remover SDK, paths, listeners) |
 | SEC-001.12 | ⏳ | Hardening: rate limit, validação input, graceful shutdown, uncaughtException |
 

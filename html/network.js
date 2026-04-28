@@ -10,12 +10,13 @@ import { getDatabase, ref, set, onValue, get, update } from "https://www.gstatic
 // ─── Flags de modo ──────────────────────────────────────────────────────────
 
 // false = Firebase RTDB (Alpha 2.2_Visual). true = server Node + Socket.io.
-// SEC-001.10 vai promover pra true permanente; SEC-001.11 remove o caminho Firebase.
-export const USE_SERVER = false;
+// Promovido pra true permanente em SEC-001.10. SEC-001.11 remove o caminho Firebase.
+export const USE_SERVER = true;
 export const IS_SERVER_MODE = USE_SERVER;
 
-// URL do server. Localhost para dev; SEC-001.10 troca para o Railway.
-const SERVER_URL = "http://localhost:3000";
+// URL do server hospedado no Railway. socket.io-client converte para wss:// automaticamente
+// porque é HTTPS. Localhost ficou pra trás na promoção SEC-001.10 (2026-04-28).
+const SERVER_URL = "https://4x4-production.up.railway.app";
 
 // ─── Firebase config (vivo enquanto USE_SERVER=false) ───────────────────────
 
