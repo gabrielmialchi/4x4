@@ -550,3 +550,238 @@ ui.js          (~250 linhas)  — syncUI, renderBoard, screens, handlers
 ### Notas para próxima sessão
 - Macros remanescentes na ordem: SEC-001.2-12 → MATCH-001 → MODE-001 → DES-001 (i18n) → FEAT-001
 - Próxima na ordem: **SEC-001.2** — boilerplate `server/`. **Atenção:** entra em uma fase de trabalho mais pesado (backend Node + Socket.io). Considerar começar criando `server/package.json` + `server.js` mínimo com eco; deploy no Railway fica para depois (testes locais primeiro).
+
+---
+
+## 2026-04-27 Sessão SEC-001.2 — Boilerplate Node + Socket.io
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- Criado [server/package.json](../server/package.json): `fast-ip-4x4-server`, `type: module`, `engines.node >=20`, deps `express ^4.19.0` + `socket.io ^4.7.5`, scripts `start` e `dev` (com `node --watch`)
+- Criado [server/server.js](../server/server.js): Express com `GET /` (texto `4x4 server ok`) e `GET /health` (JSON status+uptime); HTTP server + Socket.io anexado; CORS via função `isAllowedOrigin` cobrindo localhost (qualquer porta), `itch.io` e `*.itch.io`; eventos `connection` / `ping` (ack `{pong, echoed, t}`) / `disconnect`; graceful shutdown em SIGTERM/SIGINT com fallback de force-exit em 5s
+- Criado [server/README.md](../server/README.md): tom Gabriel-friendly em PT-BR, passo a passo de pré-requisito (node ≥20), `npm install`, `npm start`, e duas verificações independentes (HTTP no browser + `test-client.html` via duplo-clique)
+- Criado [server/test-client.html](../server/test-client.html): página standalone com botão Ping; carrega socket.io client da CDN 4.7.5; conecta a `http://localhost:3000`; loga connect/disconnect/connect_error e mostra o ack no `<pre>`. Standalone — não toca nenhum arquivo do cliente do jogo
+
+### Validação
+- `node --check server/server.js` passou (Node v24.15.0 disponível na máquina, atende `>=20`)
+- Regra inviolável #8 respeitada: server NÃO foi rodado em background pra validar — verificação dinâmica fica com o Gabriel via README
+
+### Decisões técnicas
+- **CORS via função em vez de array literal**: a regra `*.itch.io` exige regex (não cabe em lista estática). Manter as outras regras na mesma função evita misturar formatos
+- **`node --watch` em vez de nodemon**: built-in do Node ≥18.11, zero dep extra
+- **Sem dotenv**: `process.env.PORT || 3000` direto basta até SEC-001.10. Adicionar dotenv só quando aparecerem outras variáveis (Redis URL, secrets)
+- **CSS inline no `test-client.html` com cores literais**: arquivo standalone fora de `html/`, fora do escopo de DES-002. Usei `#04030a` (bg) e `#c8a84b` (gold) idênticos aos tokens pra coerência visual, sem importar `style.css`
+
+### Dependência externa para o Gabriel
+- Validação dinâmica precisa do Gabriel rodar localmente: `cd server && npm install` (1ª vez), `npm start`, abrir `http://localhost:3000` e `test-client.html`. Esperado documentado no [server/README.md](../server/README.md)
+
+### Notas para próxima sessão
+- Próxima na ordem: **SEC-001.3** — lifecycle de Private Room (criação com código ABCD, join, disconnect). Vai introduzir: Map de salas em memória, gerador de código alfanumérico (4 chars excluindo `0/O`/`1/I/L`), eventos `create_private_room` / `join_private_room` / `leave_room` / `disconnect`, primeiros códigos de erro do PROTO_SOCKET §8 (`ROOM_NOT_FOUND`, `ROOM_FULL`, `ALREADY_IN_QUEUE_OR_ROOM`)
+- Antes de SEC-001.3, idealmente o Gabriel já ter rodado `npm install` no `server/` ao menos uma vez, para destravar validações dinâmicas locais
+
+### Patch pós-validação (mesma sessão)
+- Gabriel testou e o `test-client.html` aberto via `file://` recebia `connect_error: xhr poll error` — o navegador envia `Origin: null` e o CORS rejeitou. Solução: `app.use(express.static(__dirname))` no server.js para servir a pasta `server/` por HTTP. README atualizado: passo "abrir test-client.html" agora aponta para `http://localhost:3000/test-client.html` em vez de duplo-clique
+- Gabriel confirmou pong recebido após o patch — sub-sessão fechada de fato
+
+---
+
+## 2026-04-27 Sessão SEC-001.3 — Lifecycle de Private Room
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- Criado [server/codes.js](../server/codes.js): `generateRoomCode()` retorna 4 chars do alfabeto `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (sem `0/O`/`1/I/L`, conforme PROTO_SOCKET §11). Espaço de 31⁴ ≈ 923 mil combinações
+- Criado [server/rooms.js](../server/rooms.js): estado em RAM com `Map<roomId, RoomState>` + `Map<socketId, roomId>` (lookup reverso). Constantes `MAX_PLAYERS`, `SPAWNS_BY_SLOT`, `GOALS_BY_SLOT` por modo. Funções: `createPrivateRoom`, `joinPrivateRoom`, `leaveRoom`, `markDisconnected`, `summarize`, `startCleanup`, `stopCleanup`. Cleanup roda a cada 60s removendo salas com `disconnectedAt > 5 min` (PROTO_SOCKET §11). `setInterval.unref()` para não bloquear shutdown
+- [server/server.js](../server/server.js) ampliado: handlers `create_private_room` / `join_private_room` / `leave_room` / `disconnect`. ACK direto para o emissor (`{ roomId, mySlot }` ou `{ error: { code } }`); `state_update` broadcast para a sala (`io.to(roomId).emit`) após cada mudança; `opponent_disconnected` quando alguém sai/cai. `startCleanup()` chamado no boot e `stopCleanup()` no shutdown
+- [server/test-client.html](../server/test-client.html) reformulado: radio 1v1/4v4, input de código (com auto-uppercase), botões Create/Join/Leave/Ping/Limpar log, listener para `state_update` e `opponent_disconnected`. Após Create, código preenche o input automaticamente (facilita teste com 2 abas)
+
+### Decisões técnicas
+- **Estado em memória vs. Redis**: Map em RAM por agora (PROTO_SOCKET §11 — Redis é pós-Alpha). Não compromete o que vem por aí; trocar para Redis depois é refator localizado em `rooms.js`
+- **Reconexão deixada para SEC-001.12**: `disconnect` apenas marca `connected:false`; `leaveRoom` remove de fato. PROTO_SOCKET §10 explicita que reconexão fica para hardening final
+- **`state_update` mínimo nesta sub-sessão**: payload só com `roomId/mode/phase/players[{slot,spawn,goal,connected}]`. Quando SEC-001.4 adicionar planning, `summarize()` cresce com `pos/target/inv/permMod` (com data culling em SEC-001.7). Cliente futuro vai descobrindo campos progressivamente — não há quebra
+- **Sem evento `opponent_joined` na spec, então não criei**: novos players viram visíveis pelos demais via `state_update` broadcast (que é genérico). Spec só prevê `opponent_disconnected` como sinal lateral. Mantive paridade
+- **Validação `INVALID_MODE`**: não está nominalmente nos códigos da spec §8, mas adicionei como guard estrutural (cliente futuro nunca deve mandar mode inválido — é proteção contra bugs/clients antigos). Se Gerente quiser remover, vira no-op
+
+### Validação
+- `node --check` passou em codes.js, rooms.js, server.js
+- Validação dinâmica precisa do Gabriel testar com 2 abas do test-client (uma cria, outra entra)
+
+### Notas para próxima sessão
+- Próxima na ordem: **SEC-001.4** — planning phase no server. Eventos: `set_target` / `unset_target` / `set_skill` (com validação RULE-001) / `unset_skill` / `set_ready`. Quando todos `ready`, server processa o turno (movimento, detecção de colisões, transição para combat ou aplicação de TRAP/BLOCK). Vai expandir `summarize()` com `pos/target/skill/inv/permMod/ready/trapped/jumpedBlock`. Inventário inicial é populado aqui (`{BLOCK:2,TRAP:2,SPRINT:1}` para 1v1, `{BLOCK:1,TRAP:1,SPRINT:1}` para 4v4)
+- Atenção: SEC-001.4 vai ser sub-sessão maior (planning é a fase com mais lógica de validação). Considerar fatiar se ficar grande demais
+
+---
+
+## 2026-04-27 Sessão SEC-001.4 — Planning phase no server
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- Criado [server/constants.js](../server/constants.js): `GRID_SIZE`, `MAX_PLAYERS`, `SPAWNS_BY_SLOT`, `GOALS_BY_SLOT`, `INV_INITIAL_BY_MODE` (1v1=`{B2,T2,S1}`, 4v4=`{B1,T1,S1}`)
+- Criado [server/validators.js](../server/validators.js): funções puras `arrEq`, `manhattanDist`, `isOnBoard`, `isReachableTarget(pos, target, skill)`, `canPlaceSkillOnBase` (RULE-001)
+- [server/rooms.js](../server/rooms.js) refatorado: `makePlayer` agora popula `pos/target/skill/combatSkill/inv/permMod/history/trapped/jumpedBlock/roll`; RoomState ganha `blocks/traps/spentRes/combatLocs/pendingCombat/winner/isEndgame`. Auto-transição lobby→planning via `maybeStartPlanning` quando MAX players conectados
+- [server/rooms.js](../server/rooms.js): adicionados handlers `setTarget`, `unsetTarget`, `setSkill`, `unsetSkill`, `setReady` com validações de fase, ready, inv, RULE-001 e re-validação de target ao trocar skill
+- [server/rooms.js](../server/rooms.js): `processTurn` portado de [html/combat.js](../html/combat.js) generalizado para N players — detecta swaps, detecta colisões em grupos, monta `pendingCombat` quando há colisão, move players não-colididos. `movePlayer` cobre BLOCK/TRAP plantados, SPRINT (com block no meio/alvo), trap trigger no destino, atualização de `permMod` e `history`. `checkWin` cobre vitória direta e tie-breaker 1v1 (vira `pendingCombat` endgame)
+- [server/server.js](../server/server.js): wire de 5 handlers (`set_target`, `unset_target`, `set_skill`, `unset_skill`, `set_ready`); emite `combat_started` e `game_over` quando `setReady` retorna esses flags
+- [server/test-client.html](../server/test-client.html) ampliado: campos r/c + Set Target, botões BLOCK/TRAP/SPRINT/Unset Skill/Unset Target, botão READY, painel "Meu estado" derivado do `state_update` (phase, mySlot, pos, target, skill, inv, permMod, ready, trapped, oponentes resumidos)
+
+### Decisões técnicas
+- **1 grupo de combate por turno**: PROTO_SOCKET §4 tem `pendingCombat` singular. Em 4v4 podem aparecer múltiplos grupos colidindo simultaneamente — nesta sub, processo só o primeiro grupo (em ordem de iteração); players de grupos secundários ficam parados. Fila formal de combates fica para SEC-001.5/6 ou sub-sessão de hardening 4v4 se necessário
+- **Tie-breaker 4v4 desconhecido**: PROTO_SOCKET §10 marca como pendente. Implementei fallback "slot menor vence" para o caso raríssimo de 2+ chegadas simultâneas no goal em 4v4. Decisão final fica para o Gerente quando MODE-001.2 chegar
+- **Re-validação de target ao trocar skill**: cliente pode `set_target` (dist 1) e depois `set_skill SPRINT` (dist 2) — o target vira inválido. Em vez de retornar erro, limpo `target` preventivamente; cliente precisa re-setar. Mais ergonômico que travar
+- **Sem culling ainda**: `summarize` envia tudo (target, skill, history, traps de todos). Filtragem por destinatário fica em SEC-001.7 quando o foco for vazamentos. Por agora Gabriel testa local e ver tudo é útil para debug
+- **Sem `combatSkill` revelado a outros**: SIM já envio; SEC-001.7 vai ocultar
+- **Constantes duplicadas com cliente**: `GRID_SIZE`, spawns, inventário inicial — duplicadas no server (`server/constants.js`) vs cliente (`html/gameState.js`). Pacote shared exigiria tooling; por agora a duplicação é deliberada e pequena. Mover pra `shared/` é refator localizado se virar problema
+
+### Validação
+- `node --check` passou em constants.js, validators.js, rooms.js, server.js
+- Validação dinâmica fica com Gabriel (2 abas → criar sala 1v1, ambos set_target adjacente, set_ready, observar `state_update` mostrando posições atualizadas e turno reiniciado)
+
+### Notas para próxima sessão
+- Próxima na ordem: **SEC-001.5** — combate (Royal Rumble desde o início). Implementar handler `roll_die` com geração de 1d6 no server (`crypto.randomInt(1, 7)`), preenchendo `pendingCombat.rolls[slot]`. Quando todos os participantes rolaram, agendar resolução em `COMBAT_REVEAL_MS` (timer no server). Resolução: calcular `dado + permMod + turnMod` por participante; vencedor avança (chama `movePlayer` com o target dele); perdedor consome `combatSkill` (porta de `hostResolveCombat`); empate dispara nova rodada só entre top scores (PROTO_SOCKET §5.3); transição para `planning` resetando `target/skill/ready/roll/combatSkill/jumpedBlock`. Emite `combat_resolved` com `{ winnerSlot, scores: { [slot]: {dice, mod, total} } }`
+- Atenção: combate generalizado para N participantes (não hardcode 2). Decisão SEC-001.4 sobre múltiplas colisões pode ressurgir aqui
+
+---
+
+## 2026-04-27 Sessão SEC-001.5 — Combate (Royal Rumble)
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- [server/constants.js](../server/constants.js): adicionada `COMBAT_REVEAL_MS = 2800` (espelha o cliente)
+- [server/rooms.js](../server/rooms.js): adicionados `getTurnMod`, `getTotalMod` (porta exata de combat.js do cliente); `rollDie({ socketId })` que valida fase/participação/já-rolado e gera 1d6 com `crypto.randomInt(1, 7)` (aleatoriedade no server — fecha vulnerabilidade do `Math.random` no cliente Alpha); `resolveCombat({ roomId })` que calcula totals, registra `combatLocs` (não-endgame), aplica perdedores (`applyLoser` consome combatSkill com permMod ajustado, status "wasted"), gerencia empate via re-roll só entre top scorers (PROTO_SOCKET §5.3), avança vencedor via `movePlayer`, lida com endgame (vitória final sem mover) e re-checa `checkWin` após o move (vencedor pode pisar no goal e disparar endgame ou game_over)
+- [server/server.js](../server/server.js): handler `roll_die` retorna `{ dice }` no ack; broadcast `state_update`; quando `allRolled`, chama `scheduleCombatResolve(roomId)`. Função local `scheduleCombatResolve` agenda `setTimeout(COMBAT_REVEAL_MS)` com `unref()`, dentro do callback chama `resolveCombat` e emite `combat_resolved` + (`combat_started` se reroll/endgame OU `game_over` se gameOver OU `state_update` se turno simples). Map `combatTimers` cancela timers anteriores ao agendar
+- [server/test-client.html](../server/test-client.html): seção "Combate" com botão Roll Die; listener `combat_resolved` formata as linhas `slotN: dice=X mod=Y total=Z` no log
+
+### Decisões técnicas
+- **`crypto.randomInt(1, 7)`** em vez de `Math.random` — princípio 4 do PROTO_SOCKET. Diferença prática: bot/devtools não consegue forçar dado 6 (era a vulnerabilidade no cliente Alpha)
+- **Royal Rumble generalizado**: `topScore = max(totals)` + `topScorers = participants com total === topScore`. Empate no top → re-roll só entre topScorers; perdedores fora do top já consomem combatSkill agora (não esperam o re-roll). 1v1 (sempre 2 participantes) cai no caminho ou "winner único" ou "empate de 2" — bate com Alpha. 4v4 com 3+ participantes ganha suporte natural
+- **Timer no server.js, não em rooms.js**: `setTimeout` precisa de acesso ao `io` para emit. Map `combatTimers` permite cancelar timer anterior se outro combate disparar (não acontece na prática mas é defensivo). Não cancelo timer ao deletar sala — `resolveCombat` retorna `null` se sala sumiu, então callback vira no-op silencioso
+- **`combat_resolved` antes dos eventos de transição**: cliente recebe `combat_resolved` com scores (animação termina), depois `combat_started` (re-roll), `game_over` ou `state_update` (turno seguinte). Ordem importa pra UX: scores aparecem antes do próximo combat ou do reset
+- **Endgame com empate**: spec original do 1v1 (`hostResolveCombat`) zera roll e mantém phase=combat; minha implementação faz exatamente isso via `isReroll: true` (pendingCombat.participants continua igual, rolls zeram, phase fica em combat). Cliente vê `combat_resolved` (winner=null) + novo `combat_started`
+
+### Validação
+- `node --check` passou em constants.js, rooms.js, server.js
+- Validação dinâmica fica com Gabriel: 2 abas, ambos miram a mesma célula, set_ready → `combat_started` aparece → cada um clica Roll Die → após ~2.8s `combat_resolved` mostra os scores
+
+### Notas para próxima sessão
+- Próxima na ordem: **SEC-001.6** — endgame + condição de vitória. Boa parte já está implementada como subproduto desta sub (checkWin, isEndgame, game_over). SEC-001.6 fica focada em: garantir que `game_over` envia `full_state` correto (Aftermath precisa de `history` completo dos oponentes, sem culling — única exceção da spec §5.4); validar que `restart_game` reseta tudo corretamente; possivelmente implementar `restart_game` aqui (não estava na ordem mas faz sentido fechar o ciclo). Também: revisar a regra de empate 4v4 com Gerente (PROTO_SOCKET §10 — atualmente cai no fallback "slot menor vence")
+
+---
+
+## 2026-04-27 Sessão SEC-001.6 — Endgame + restart_game
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- [server/rooms.js](../server/rooms.js): adicionada `restartGame({ socketId })` — valida `phase === "game_over"` e `me.connected`, depois reseta room (`phase`/`winner`/`isEndgame`/`blocks`/`traps`/`spentRes`/`combatLocs`/`pendingCombat`) e cada player via helper `resetPlayer` (pos→spawn, inv recarrega, history=[spawn], demais zerados)
+- [server/server.js](../server/server.js): handler `restart_game` ack→`{ok:true}` em sucesso e `state_update` broadcast pra sala. Erros mapeados: `NOT_IN_GAME_OVER`, `ROOM_NOT_FOUND`
+- [server/test-client.html](../server/test-client.html): seção "Game Over" com botão Restart Game
+
+### Decisões técnicas
+- **`game_over` já envia `full_state` correto desde SEC-001.5**: o handler usa `summarize(room)` que hoje não filtra nada (culling formal vem em SEC-001.7). Quando SEC-001.7 chegar, `state_update` ganha culling mas `game_over.full_state` continua usando o summarize sem filtro — única exceção do PROTO_SOCKET §5.4. Decisão: manter um único `summarize` agora; em SEC-001.7 dividir em `summarizeFor(slot)` (com culling) e `summarizeFull(room)` (sem)
+- **Restart sem consenso**: PROTO_SOCKET §6.2 diz "qualquer player conectado em game_over". Em 4v4 isso pode parecer brusco (1 player reseta sem o consenso dos outros 3); decisão de UX a revisitar quando MATCH-001/MODE-001 chegarem. Por hora a regra literal da spec foi implementada
+- **Regra de empate 4v4 mantida como fallback "slot menor vence"** (decidido em SEC-001.4). Empate de chegada simultânea ao goal em 4v4 é caso raríssimo; decisão final fica para o Gerente quando MODE-001.2 chegar. Sub-sessão SEC-001.6 não força essa decisão
+
+### Validação
+- `node --check` passou em rooms.js, server.js
+- Validação dinâmica fica com Gabriel: jogar até alguém vencer (chega na diagonal oposta) → `game_over` aparece com `winnerSlot` → clicar Restart em qualquer aba → `state_update` mostra phase=planning, todos no spawn, inv recarregado
+
+### Macro SEC-001 — checkpoint
+**Implementado (SEC-001.2 a SEC-001.6):** boilerplate, lifecycle de Private Room, planning phase, combat (Royal Rumble), endgame + restart. Server tem hoje **fluxo de jogo completo end-to-end** para 1v1 (e arquitetonicamente preparado para 4v4). 6/12 sub-sessões da Macro concluídas (50%).
+
+### Notas para próxima sessão
+- Próxima na ordem: **SEC-001.7** — data culling (`state_for_me` específico por destinatário). Implementar: dividir `summarize` em `summarizeFor(room, viewerSlot)` que filtra `target/skill/combatSkill/roll/history/jumpedBlock` dos oponentes; filtrar `traps[]` para enviar apenas as do `viewerSlot` (PROTO_SOCKET §5.2); filtrar `blocks[]` por distância Manhattan ≤ 1 do `me.pos` para os de outros owners (§5.1); criar `summarizeFull(room)` separado para `game_over.full_state`. Trocar `broadcastState` por loop que emite por socket com payload customizado. Também: emitir `trap_triggered` quando uma trap dispara (hoje só a flag `trapped` no player vai pro state_update)
+
+---
+
+## 2026-04-27 Sessão SEC-001.7 — Data culling (state_for_me)
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- [server/rooms.js](../server/rooms.js): `summarize` substituída por duas funções:
+  - `summarizeFor(room, viewerSlot)`: payload de `state_update` cullado conforme PROTO_SOCKET §5. Estrutura nova `{ mySlot, me: PlayerState, opponents: OpponentView[] }`. Oponentes nunca recebem `target/skill/combatSkill/roll/history/jumpedBlock`. `blocks[]` filtrado por owner próprio OU dist Manhattan ≤ 1 do `me.pos` (§5.1). `traps[]` filtrado por `owner === viewerSlot` (§5.2). `pendingCombat` virou `PendingCombatView` com `myRoll` (visível só pra mim) e `opponentRolls: [{slot, rolled}]` (boolean indicando se o adversário já rolou — sem revelar o número)
+  - `summarizeFull(room)`: versão sem culling, exclusivamente para `game_over.full_state` (§5.4). Mantém schema antigo com `players[]` completo para o Aftermath desenhar trajetos
+- [server/rooms.js](../server/rooms.js): mecanismo `startTrapRecording`/`recordTrap`/`flushTrapRecording` — buffer no escopo do módulo (Node single-thread, seguro). `movePlayer` registra cada trap disparada; `processTurn` e `resolveCombat` flush antes de retornar, devolvendo `trapTriggers: [{cell, ownerSlot}]`
+- [server/server.js](../server/server.js): `broadcastState` reescrito como loop por player (cada socket recebe `summarizeFor` com seu próprio slot). Helpers novos: `emitCombatStarted`, `emitCombatResolved`, `emitGameOver` (única chamada que usa `summarizeFull`), `emitTrapTriggered` (emite com state filtrado por destinatário, conforme §7). `set_ready` e `scheduleCombatResolve` agora flush trap triggers e emitem `trap_triggered` quando aplicável
+- [server/test-client.html](../server/test-client.html): `updateStatus` adaptado para `state.me`/`state.opponents`; listener `trap_triggered` novo; `combat_started`/`combat_resolved` agora chamam `updateStatus(state)`; `game_over` recompõe schema antigo (vem com `summarizeFull`) pra reaproveitar a UI
+
+### Decisões técnicas
+- **Schema do state quebrou compat com SEC-001.4 a 6**: `state.players` virou `state.me + state.opponents`. Test-client foi adaptado mas não é cliente do jogo — quando SEC-001.8 plugar o cliente real (flag `USE_SERVER`), ele terá que entender o schema novo. Decisão: schema do state_update é o do PROTO_SOCKET §5 desde sempre — SEC-001.4-6 estavam temporariamente "vazando" tudo até esta sub fechar
+- **Buffer global de trap triggers em rooms.js**: Node é single-thread, operações de turn/combat são síncronas — buffer no escopo do módulo é seguro e mais simples que passar contexto por argumento. Documentado no comentário do buffer
+- **trap_triggered carrega state_for_me**: PROTO_SOCKET §7 lista `state` no payload. Substitui o `state_update` separado quando há trap (evita 2x payload de state). Em casos sem trap, `broadcastState` cobre normal
+- **PendingCombatView com `opponentRolls: [{slot, rolled: bool}]`**: a spec §5 estava ambígua (`{ slot: number }[]`); interpretei como "indicação de quem já rolou, sem o número". Cliente vai poder renderizar "AGUARDANDO" para oponentes que ainda não rolaram, sem vazar o resultado
+- **`game_over` mantém broadcast pra sala (não por socket)**: payload é `summarizeFull` igual pra todos (Aftermath é sem culling). Otimização: 1 emit em vez de N
+- **`combat_resolved` também usa state filtrado**: preserva culling até o último momento. Cliente vê `me.history` próprio mas não dos oponentes (só revelado em `game_over.full_state`)
+
+### Validação
+- `node --check` passou em rooms.js e server.js
+- Validação dinâmica essencial pelo Gabriel: 2 abas, criar partida 1v1. **Verificar com DevTools (Network → WS → Messages)**:
+  - Aba 1 (slot 0): após plantar TRAP em alguma célula, no payload `state_update` da aba 1 deve aparecer `traps: [{r,c,owner:0}]`. **Na aba 2 NÃO deve aparecer essa trap em `state.traps`** — esse era o vazamento original que SEC-001 fechou
+  - Durante planning, oponente em `state.opponents[]` NÃO deve ter campos `target`, `skill`, `combatSkill`, `roll`, `history`, `jumpedBlock`
+  - Quando trap dispara: ambas abas recebem `trap_triggered` com `cell` e `by_owner_slot`
+
+### Macro SEC-001 — checkpoint
+**Implementado (SEC-001.2 a SEC-001.7):** boilerplate, lifecycle Private Room, planning, combat (Royal Rumble), endgame+restart, **culling de info oculta**. Server hoje **não vaza nada do oponente** que o jogador não deveria ver. 7/12 sub-sessões da Macro concluídas (~58%).
+
+### Notas para próxima sessão
+- Próxima na ordem: **SEC-001.8** — flag `USE_SERVER` em `network.js`. Esta é a sub que conecta o cliente real ao server. Implementar: importar `socket.io-client` no `html/network.js` (CDN ou `node_modules` servido — decidir); adicionar flag `USE_SERVER` (default `false`); quando `true`, `initMultiplayer` conecta ao server em vez de Firebase, e `update`/`set` viram emits Socket.io equivalentes; receber `state_update` do server e popular `window.S` no schema antigo (cliente espera `state.players[]` não `state.me/opponents`) — **adaptador entre schemas**. Decisão: o adaptador fica em `network.js` ou cliente é refatorado pro schema novo? Em pró de menor escopo para SEC-001.8, adaptador no `network.js` é caminho mais rápido
+
+---
+
+## 2026-04-28 Sessão SEC-001.8 — Cliente plugado ao server (flag USE_SERVER)
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- [html/network.js](../html/network.js) reescrito com bifurcação. Exports novos: `USE_SERVER` (default `false`), `IS_SERVER_MODE`, `actReady(target, skill)`, `actRollDie(localRoll)`, `actRestartGame(resetState)`. Wrappers escolhem entre Firebase update/set ou Socket.io emit conforme a flag. `initMultiplayer` separado em `initFirebaseMode` (lógica original) e `initServerMode` (conecta a `http://localhost:3000`, registra listeners de `state_update`/`combat_started`/`combat_resolved`/`trap_triggered`/`game_over`, faz `create_private_room` ou `join_private_room` conforme `?sala=` na URL)
+- [html/network.js](../html/network.js): adaptadores `adaptStateForMe(state)` (state_for_me com `me`/`opponents` → `window.S` schema antigo com `players[]`) e `adaptFullState(fullState)` (game_over.full_state já tem players[], só renomeia `slot` → `id`). Defaults para campos cullados de oponentes (target=false, skill="", roll=0, history=[spawn], etc.) preenchem o que o cliente lê na UI
+- [html/ui.js](../html/ui.js): import trocado de `update/ref/set/db` (firebase) para `IS_SERVER_MODE/actReady/actRollDie/actRestartGame`. `syncUI` agora pula `hostProcessTurn`/`hostResolveCombat` quando `IS_SERVER_MODE` (server é autoritativo). `window.ready` chama `actReady(me.target, me.skill)`. `window.rollDie` virou async: em modo server pede o dado ao server (anti-trapaça); em modo Firebase gera local. `window.restartGame` chama `actRestartGame(resetState)` (resetState ignorado em modo server)
+- [html/index.html](../html/index.html): adicionada `<script src="https://cdn.socket.io/4.7.5/socket.io.min.js">` antes do módulo principal (carrega `io` global; inerte se `USE_SERVER=false`)
+
+### Decisões técnicas
+- **Adaptador no network.js, não refatorar o cliente**: o cliente (combat.js, ui.js) consome `window.S` no schema antigo (`players[0]/players[1]`, índice = slot). Refatorar pra schema `me`/`opponents` exigiria mudar todas as renderizações. Adaptador em network.js mantém escopo da sub e isola a mudança — quando SEC-001.11 deletar o caminho Firebase, o adaptador continua útil até o cliente ser eventualmente refatorado para o schema novo (não é obrigatório)
+- **Default `USE_SERVER=false`**: cliente continua jogando via Firebase como sempre. Gabriel troca pra `true` na linha 18 de network.js quando quiser testar contra o server local. SEC-001.10 vai promover pra `true` permanente após validação de paridade
+- **`actRollDie` retorna o dado**: server emit ack com `{ dice }`, cliente usa esse número pra animação. Em Firebase o cliente gera local e transmite — a função recebe esse local roll como argumento e retorna ele mesmo. Interface uniforme; UX da animação inalterada
+- **CDN socket.io-client em vez de import ES**: socket.io-client tem dependências (engine.io-client, etc.) — mais simples carregar via CDN como global `io` do que configurar bundler. Custo: ~30KB adicionais; benefício: zero tooling. Quando o jogo for empacotado pra itch.io (SEC-001.10/11), pode trocar pra import bundle
+- **`actReady` envia `set_skill` antes de `set_target`**: server valida `set_target` contra a skill atual (SPRINT distância 2 vs adjacente). Sequência da spec preservada
+- **Chave Firebase ainda hardcoded**: chave foi restringida por domínio em 2026-04-27 (resposta ao alerta GitHub) e o vazamento real morre em SEC-001.11 quando o caminho Firebase for removido. Comentário atualizado no network.js refletindo isso
+
+### Validação
+- `node --check` passou em network.js e ui.js (mesmo sendo módulos browser, sintaxe ES é compatível com Node ≥20)
+- Validação dinâmica fica com Gabriel: testar AMBOS os modos:
+  - `USE_SERVER=false` (default): jogar normal → tudo deve funcionar igual à Alpha 2.2_Visual (regressão zero)
+  - `USE_SERVER=true`: subir o server (`cd server && npm start`), abrir `html/index.html` em 2 abas → primeira cria sala (URL ganha `?sala=ABCD`), segunda copia URL → ambos jogam normalmente. Verificar via DevTools que mensagens Socket.io aparecem em vez de Firebase
+
+### Notas para próxima sessão
+- Próxima na ordem: **SEC-001.9** — validação de paridade Firebase ↔ Server. Plano: roteiro de teste comparando comportamentos lado a lado; documentar diferenças encontradas (se houver) em `docs/PROTO_SOCKET.md` ou novo `docs/PARIDADE_REPORT.md`. Casos críticos: trap trigger, BLOCK quebrado em SPRINT, swap de posições, empate em combate (combate normal e endgame), restart durante diferentes phases. Sub-sessão majoritariamente de teste — código só se aparecer bug. Possivelmente curtinha
+- Pendência conhecida: quando o cliente conecta em modo server e a sala já está cheia, hoje o `alert("Erro ao entrar na sala: ROOM_FULL")` mata o fluxo. Parece OK para alpha mas piora UX em produção; melhorar em SEC-001.12 (hardening) ou MATCH-001
+- Atenção pra SEC-001.9: o cliente real ainda usa `setSkill`/`onCellClick` que mexem em `me.skill`/`me.target` localmente em `window.S`. Isso é renderização otimista — quando ele aperta CONFIRMAR, o `actReady` envia ao server. Server processa e devolve `state_update` que substitui `window.S` (incluindo target/skill confirmados). Edge case: se o server rejeitar (ex: `INVALID_TARGET`), o `me.skill` fica dessincronizado. Em SEC-001.9 vale mapear esses cantos
+
+---
+
+## 2026-04-28 Sessão SEC-001.9 — Roteiro de paridade Firebase ↔ Server (em revisão)
+**Status:** 🔄 Em revisão (aguarda Gabriel executar o roteiro no PC)
+**Branch:** —
+
+### Feito
+- [server/server.js](../server/server.js): atalho de DEV `app.use("/jogo", express.static(path.join(__dirname, "..", "html")))` — serve a pasta `html/` em `http://localhost:3000/jogo/index.html`. Permite testar o cliente em modo `USE_SERVER=true` sem ter um server estático separado. Atalho some quando o cliente for hospedado no itch.io (SEC-001.10/11)
+- Criado [docs/PARIDADE_REPORT.md](PARIDADE_REPORT.md): roteiro com **16 cenários** numerados, cada um com comportamento esperado, tabela de marcação por modo (Firebase / Server) e campo de notas. Cobre setup de sala, movimento, BLOCK/TRAP, SPRINT (com block no meio/alvo), swap, combate (vencedor único, empate, endgame), vitória direta, aftermath, restart, RULE-001 e disconnect. Inclui seção "Cantos sutis" com 3 pontos de atenção sobre renderização otimista e ordem de eventos
+- Resultado consolidado tem 2 caixas: "Paridade total" → libera SEC-001.10; "Divergência detectada" → vira correção antes de SEC-001.10
+
+### Decisões de escopo
+- **Sub-sessão fica em "🔄 em revisão" até Gabriel executar o roteiro no PC**: marcar ✅ exigiria validação dinâmica em ambos os modos. Como Gabriel está mobile/sem PC neste momento (mensagem dele), o roteiro fica preparado para quando ele estiver no PC. Ele aciona o trigger `iniciar SEC-001.9` ou similar quando pronto, e a sub fecha com base no resultado
+- **Atalho `/jogo` do server**: decisão pragmática para reduzir fricção. Em produção (Railway/itch.io) o cliente vive em domínio separado — o atalho some sem perda
+- **Não implementei correções proativas dos "cantos sutis"** (renderização otimista, duplo-emit roll_die): listados no PARIDADE_REPORT como aceitáveis para Alpha. Hardening explícito é trabalho de SEC-001.12
+
+### Notas para próxima sessão
+- **Quando Gabriel rodar o roteiro:**
+  - Se todos os 16 cenários passarem → marcar SEC-001.9 ✅ e seguir pra **SEC-001.10** (promover `USE_SERVER=true` permanente, configurar Railway, atualizar `SERVER_URL` em network.js para a URL do Railway, possivelmente publicar cliente no itch.io)
+  - Se houver divergência → cada divergência vira tarefa de correção dentro da própria SEC-001.9 (sem virar nova sub) e a paridade é re-rodada
+- **SEC-001.10 vai precisar de inputs do Gabriel:**
+  - Conta Railway criada e conectada ao repo (ou subir o `server/` manualmente)
+  - URL final do server (ex: `https://4x4.up.railway.app`)
+  - Decisão sobre cliente: continuar local enquanto Alpha, ou já publicar no itch.io junto?
+- **Pergunta de produto sobre regra de empate 4v4** (PROTO_SOCKET §10) ainda pendente — segue como decisão ao chegar em MODE-001.2

@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>4x4 server — test client</title>
+<style>
+  body {
+    background: #04030a;
+    color: #e8e8ea;
+    font-family: ui-monospace, Consolas, "Courier New", monospace;
+    padding: 24px;
+    max-width: 820px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 18px; margin: 0 0 8px; color: #c8a84b; }
+  h2 { font-size: 13px; margin: 20px 0 6px; color: #c8a84b; text-transform: uppercase; letter-spacing: 1px; }
+  p { color: #b8b8c0; margin: 0 0 12px; font-size: 13px; }
+  code { background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 3px; }
+  button {
+    background: #c8a84b;
+    color: #04030a;
+    border: 0;
+    padding: 7px 12px;
+    font-family: inherit;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 12px;
+    margin: 0 4px 4px 0;
+  }
+  button:hover { background: #d6b85a; }
+  button.alt { background: rgba(200,168,75,0.25); color: #e8e8ea; }
+  button.alt:hover { background: rgba(200,168,75,0.4); }
+  button.ready { background: #5fb85a; }
+  button.ready:hover { background: #6fc86a; }
+  input[type="text"], input[type="number"] {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #e8e8ea;
+    padding: 6px 8px;
+    font-family: inherit;
+    font-size: 12px;
+    border-radius: 4px;
+    width: 60px;
+  }
+  input[type="text"] { text-transform: uppercase; letter-spacing: 2px; width: 80px; }
+  label { font-size: 12px; color: #b8b8c0; margin-right: 10px; }
+  label input[type="radio"] { margin-right: 4px; vertical-align: middle; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px; margin-bottom: 6px; }
+  .status {
+    background: rgba(91,139,239,0.08);
+    border: 1px solid rgba(91,139,239,0.25);
+    padding: 10px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .status .row-stat { display: flex; gap: 16px; flex-wrap: wrap; }
+  .status .label-stat { color: #8a8a90; }
+  .status .val { color: #e8e8ea; font-weight: bold; }
+  pre {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 12px;
+    border-radius: 4px;
+    min-height: 200px;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-top: 8px;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+<h1>4x4 server — test client</h1>
+<p>Server precisa estar em <code>http://localhost:3000</code>.</p>
+
+<h2>Modo (só para Create)</h2>
+<div class="row">
+  <label><input type="radio" name="mode" value="1v1" checked>1v1</label>
+  <label><input type="radio" name="mode" value="4v4">4v4</label>
+</div>
+
+<h2>Sala</h2>
+<div class="row">
+  <button id="create-btn">Create Private Room</button>
+  <input id="code-input" type="text" maxlength="4" placeholder="ABCD">
+  <button id="join-btn">Join</button>
+  <button id="leave-btn" class="alt">Leave</button>
+</div>
+
+<h2>Meu estado</h2>
+<div class="status" id="status">
+  <div class="row-stat">
+    <span><span class="label-stat">phase:</span> <span class="val" id="s-phase">—</span></span>
+    <span><span class="label-stat">mySlot:</span> <span class="val" id="s-slot">—</span></span>
+    <span><span class="label-stat">pos:</span> <span class="val" id="s-pos">—</span></span>
+    <span><span class="label-stat">target:</span> <span class="val" id="s-target">—</span></span>
+    <span><span class="label-stat">skill:</span> <span class="val" id="s-skill">—</span></span>
+    <span><span class="label-stat">ready:</span> <span class="val" id="s-ready">—</span></span>
+  </div>
+  <div class="row-stat" style="margin-top:6px">
+    <span><span class="label-stat">inv:</span> <span class="val" id="s-inv">—</span></span>
+    <span><span class="label-stat">permMod:</span> <span class="val" id="s-permmod">—</span></span>
+    <span><span class="label-stat">trapped:</span> <span class="val" id="s-trapped">—</span></span>
+  </div>
+  <div class="row-stat" style="margin-top:6px">
+    <span><span class="label-stat">opponents:</span> <span class="val" id="s-opps">—</span></span>
+  </div>
+</div>
+
+<h2>Planning</h2>
+<div class="row">
+  <label>r:<input id="t-r" type="number" min="0" max="3" value="0"></label>
+  <label>c:<input id="t-c" type="number" min="0" max="3" value="0"></label>
+  <button id="set-target-btn">Set Target</button>
+  <button id="unset-target-btn" class="alt">Unset Target</button>
+</div>
+<div class="row">
+  <button id="skill-block-btn">BLOCK</button>
+  <button id="skill-trap-btn">TRAP</button>
+  <button id="skill-sprint-btn">SPRINT</button>
+  <button id="unset-skill-btn" class="alt">Unset Skill</button>
+</div>
+<div class="row">
+  <button id="ready-btn" class="ready">READY</button>
+</div>
+
+<h2>Combate</h2>
+<div class="row">
+  <button id="roll-btn">Roll Die</button>
+</div>
+
+<h2>Game Over</h2>
+<div class="row">
+  <button id="restart-btn" class="ready">Restart Game</button>
+</div>
+
+<h2>Diagnóstico</h2>
+<div class="row">
+  <button id="ping-btn" class="alt">Ping</button>
+  <button id="clear-btn" class="alt">Limpar log</button>
+</div>
+
+<h2>Log</h2>
+<pre id="log"></pre>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+  const logEl = document.getElementById("log");
+  const codeInput = document.getElementById("code-input");
+  let mySlot = null;
+
+  function log(msg) {
+    const stamp = new Date().toLocaleTimeString();
+    const line = `[${stamp}] ${msg}`;
+    logEl.textContent = logEl.textContent ? `${logEl.textContent}\n${line}` : line;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function getMode() {
+    return document.querySelector('input[name="mode"]:checked').value;
+  }
+
+  function fmt(v) {
+    if (v === false || v === null || v === undefined) return "—";
+    if (Array.isArray(v)) return `[${v.join(",")}]`;
+    return String(v);
+  }
+
+  function updateStatus(state) {
+    if (!state) return;
+    document.getElementById("s-phase").textContent = state.phase || "—";
+    const me = state.me;
+    if (!me) return;
+    document.getElementById("s-slot").textContent = state.mySlot;
+    document.getElementById("s-pos").textContent = fmt(me.pos);
+    document.getElementById("s-target").textContent = fmt(me.target);
+    document.getElementById("s-skill").textContent = me.skill || "—";
+    document.getElementById("s-ready").textContent = me.ready ? "✓" : "—";
+    document.getElementById("s-inv").textContent = `B${me.inv.BLOCK} T${me.inv.TRAP} S${me.inv.SPRINT}`;
+    document.getElementById("s-permmod").textContent = me.permMod;
+    document.getElementById("s-trapped").textContent = me.trapped ? "✓" : "—";
+    const opps = (state.opponents || []).map(
+      (p) => `slot${p.slot}@${fmt(p.pos)} inv=B${p.inv.BLOCK}T${p.inv.TRAP}S${p.inv.SPRINT}${p.ready ? " ✓" : ""}${p.connected ? "" : " (off)"}`
+    );
+    document.getElementById("s-opps").textContent = opps.join("  |  ") || "—";
+  }
+
+  const socket = io("http://localhost:3000");
+
+  socket.on("connect", () => log(`connected (${socket.id})`));
+  socket.on("disconnect", (reason) => { log(`disconnected (${reason})`); mySlot = null; });
+  socket.on("connect_error", (err) => log(`connect_error: ${err.message}`));
+
+  socket.on("state_update", ({ state }) => {
+    const total = (state.opponents?.length || 0) + (state.me ? 1 : 0);
+    log(`state_update: phase=${state.phase} players=${total}`);
+    updateStatus(state);
+  });
+
+  socket.on("opponent_disconnected", ({ slot }) => log(`opponent_disconnected: slot ${slot}`));
+
+  socket.on("combat_started", ({ pendingCombat, state }) => {
+    log(`combat_started: cell=${fmt(pendingCombat.cell)} participants=[${pendingCombat.participants.join(",")}]`);
+    updateStatus(state);
+  });
+
+  socket.on("combat_resolved", ({ result, state }) => {
+    const lines = Object.entries(result.scores).map(
+      ([slot, s]) => `slot${slot}: dice=${s.dice} mod=${s.mod} total=${s.total}`
+    );
+    log(`combat_resolved: winner=${result.winnerSlot ?? "(empate, re-roll)"}\n  ${lines.join("\n  ")}`);
+    updateStatus(state);
+  });
+
+  socket.on("trap_triggered", ({ cell, by_owner_slot, state }) => {
+    log(`trap_triggered: cell=${fmt(cell)} owner=slot${by_owner_slot}`);
+    updateStatus(state);
+  });
+
+  socket.on("game_over", ({ winnerSlot, full_state }) => {
+    log(`game_over: winnerSlot=${winnerSlot}`);
+    // full_state tem schema diferente (sem .me/.opponents) — é summarizeFull. Recompõe pra UI:
+    if (full_state && full_state.players && mySlot !== null) {
+      const me = full_state.players.find((p) => p.slot === mySlot);
+      const opps = full_state.players.filter((p) => p.slot !== mySlot);
+      updateStatus({ phase: full_state.phase, mySlot, me, opponents: opps });
+    }
+  });
+
+  function emitWithLog(event, payload) {
+    log(`${event} ${JSON.stringify(payload)}`);
+    socket.emit(event, payload, (ack) => {
+      if (ack?.error) log(`  ← error: ${ack.error.code}`);
+      else log(`  ← ${JSON.stringify(ack)}`);
+    });
+  }
+
+  document.getElementById("create-btn").addEventListener("click", () => {
+    const mode = getMode();
+    log(`create_private_room { mode: "${mode}" }`);
+    socket.emit("create_private_room", { mode }, (ack) => {
+      if (ack?.error) return log(`  ← error: ${ack.error.code}`);
+      log(`  ← roomId: ${ack.roomId}, mySlot: ${ack.mySlot}`);
+      codeInput.value = ack.roomId;
+      mySlot = ack.mySlot;
+    });
+  });
+
+  document.getElementById("join-btn").addEventListener("click", () => {
+    const roomId = codeInput.value.trim().toUpperCase();
+    if (!roomId) return log(`(insira código antes de Join)`);
+    log(`join_private_room { roomId: "${roomId}" }`);
+    socket.emit("join_private_room", { roomId }, (ack) => {
+      if (ack?.error) return log(`  ← error: ${ack.error.code}`);
+      log(`  ← mySlot: ${ack.mySlot}`);
+      mySlot = ack.mySlot;
+    });
+  });
+
+  document.getElementById("leave-btn").addEventListener("click", () => {
+    emitWithLog("leave_room", {});
+    mySlot = null;
+  });
+
+  document.getElementById("set-target-btn").addEventListener("click", () => {
+    const r = parseInt(document.getElementById("t-r").value, 10);
+    const c = parseInt(document.getElementById("t-c").value, 10);
+    emitWithLog("set_target", { target: [r, c] });
+  });
+
+  document.getElementById("unset-target-btn").addEventListener("click", () => emitWithLog("unset_target", {}));
+
+  document.getElementById("skill-block-btn").addEventListener("click", () => emitWithLog("set_skill", { skill: "BLOCK" }));
+  document.getElementById("skill-trap-btn").addEventListener("click", () => emitWithLog("set_skill", { skill: "TRAP" }));
+  document.getElementById("skill-sprint-btn").addEventListener("click", () => emitWithLog("set_skill", { skill: "SPRINT" }));
+  document.getElementById("unset-skill-btn").addEventListener("click", () => emitWithLog("unset_skill", {}));
+
+  document.getElementById("ready-btn").addEventListener("click", () => emitWithLog("set_ready", {}));
+
+  document.getElementById("roll-btn").addEventListener("click", () => emitWithLog("roll_die", {}));
+
+  document.getElementById("restart-btn").addEventListener("click", () => emitWithLog("restart_game", {}));
+
+  document.getElementById("ping-btn").addEventListener("click", () => {
+    log(`ping`);
+    socket.emit("ping", { hello: "world" }, (ack) => log(`  ← pong: ${JSON.stringify(ack)}`));
+  });
+
+  document.getElementById("clear-btn").addEventListener("click", () => { logEl.textContent = ""; });
+</script>
+</body>
+</html>

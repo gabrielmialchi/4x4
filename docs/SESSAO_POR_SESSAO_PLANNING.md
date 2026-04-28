@@ -36,14 +36,14 @@ Backlog organizado em **Macro Tarefas** (épicos) com **sub-sessões** numeradas
 | 17 | DES-002.2 | ✅ | Design tokens |
 | 18 | DES-002.3 | ✅ | Design tokens |
 | 19 | DES-002.4 | ✅ | Design tokens |
-| 20 | SEC-001.2 | ⏳ | Backend — boilerplate Node + Socket.io |
-| 21 | SEC-001.3 | ⏳ | Backend — lifecycle Private Room (criação/join) |
-| 22 | SEC-001.4 | ⏳ | Backend — planning phase (com validação RULE-001) |
-| 23 | SEC-001.5 | ⏳ | Backend — combat (Royal Rumble desde o início) |
-| 24 | SEC-001.6 | ⏳ | Backend — endgame + condição de vitória |
-| 25 | SEC-001.7 | ⏳ | Backend — data culling (`state_for_me`) |
-| 26 | SEC-001.8 | ⏳ | Cliente — flag `USE_SERVER` em network.js |
-| 27 | SEC-001.9 | ⏳ | Validação de paridade Firebase ↔ Server |
+| 20 | SEC-001.2 | ✅ | Backend — boilerplate Node + Socket.io |
+| 21 | SEC-001.3 | ✅ | Backend — lifecycle Private Room (criação/join) |
+| 22 | SEC-001.4 | ✅ | Backend — planning phase (com validação RULE-001) |
+| 23 | SEC-001.5 | ✅ | Backend — combat (Royal Rumble desde o início) |
+| 24 | SEC-001.6 | ✅ | Backend — endgame + condição de vitória |
+| 25 | SEC-001.7 | ✅ | Backend — data culling (`state_for_me`) |
+| 26 | SEC-001.8 | ✅ | Cliente — flag `USE_SERVER` em network.js |
+| 27 | SEC-001.9 | 🔄 | Validação de paridade Firebase ↔ Server (roteiro pronto, aguarda Gabriel rodar) |
 | 28 | SEC-001.10 | ⏳ | Promoção: `USE_SERVER=true` permanente |
 | 29 | SEC-001.11 | ⏳ | Descontinuar Firebase |
 | 30 | SEC-001.12 | ⏳ | Hardening: rate limit, validação, graceful shutdown |
@@ -93,14 +93,14 @@ Backlog organizado em **Macro Tarefas** (épicos) com **sub-sessões** numeradas
 | Sub-sessão | Status | Tema |
 |-----------|--------|------|
 | SEC-001.1 | ✅ | `docs/PROTO_SOCKET.md` v2.0 aprovada em 2026-04-26 — incluiu regra de empate no Royal Rumble (re-roll entre empatados) |
-| SEC-001.2 | ⏳ | Boilerplate `server/`: Node + Socket.io rodando, eco básico, `package.json` |
-| SEC-001.3 | ⏳ | Lifecycle de Private Room (criação com código ABCD, join, disconnect) |
-| SEC-001.4 | ⏳ | Planning phase no server (set_target/skill/ready + validação RULE-001 incluída) |
-| SEC-001.5 | ⏳ | Combat phase no server — **Royal Rumble desde o início** (genérico para 2+ players) |
-| SEC-001.6 | ⏳ | Endgame + condição de vitória (diagonal por slot — preparada para 4v4 desde o início) |
-| SEC-001.7 | ⏳ | Data culling: server envia `state_for_me` específico por destinatário |
-| SEC-001.8 | ⏳ | Adicionar flag `USE_SERVER` em `network.js`; em `true`, cliente conecta ao server |
-| SEC-001.9 | ⏳ | Validação de paridade Firebase ↔ Server (smoke test alternando flag) |
+| SEC-001.2 | ✅ | Boilerplate `server/`: Node + Socket.io rodando, eco básico, `package.json` (concluído 2026-04-27) |
+| SEC-001.3 | ✅ | Lifecycle de Private Room (criação com código ABCD, join, disconnect) (concluído 2026-04-27) |
+| SEC-001.4 | ✅ | Planning phase no server (set_target/skill/ready + validação RULE-001 incluída) (concluído 2026-04-27) |
+| SEC-001.5 | ✅ | Combat phase no server — **Royal Rumble desde o início** (genérico para 2+ players) (concluído 2026-04-27) |
+| SEC-001.6 | ✅ | Endgame + condição de vitória (diagonal por slot — preparada para 4v4 desde o início) (concluído 2026-04-27) |
+| SEC-001.7 | ✅ | Data culling: server envia `state_for_me` específico por destinatário (concluído 2026-04-27) |
+| SEC-001.8 | ✅ | Adicionar flag `USE_SERVER` em `network.js`; em `true`, cliente conecta ao server (concluído 2026-04-28) |
+| SEC-001.9 | 🔄 | Validação de paridade Firebase ↔ Server (smoke test alternando flag) (roteiro 2026-04-28) |
 | SEC-001.10 | ⏳ | Promoção: `USE_SERVER=true` permanente |
 | SEC-001.11 | ⏳ | Descontinuar Firebase (remover SDK, paths, listeners) |
 | SEC-001.12 | ⏳ | Hardening: rate limit, validação input, graceful shutdown, uncaughtException |
