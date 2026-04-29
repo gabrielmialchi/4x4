@@ -11,10 +11,16 @@
     /* ── players ────────────────────────────────────── */
     --p1:       #3b8fef;
     --p2:       #ef3b3b;
+    --p3:       #c084fc;  /* roxo — slot 2 (canto inferior-esquerdo no 4v4) */
+    --p4:       #facc15;  /* dourado — slot 3 (canto superior-direito no 4v4) */
     --gp1:      rgba(59,143,239,.35);
     --gp2:      rgba(239,59,59,.35);
+    --gp3:      rgba(192,132,252,.35);
+    --gp4:      rgba(250,204,21,.35);
     --p1-highlight: rgba(130,200,255,.5);
     --p2-highlight: rgba(255,130,130,.5);
+    --p3-highlight: rgba(220,180,255,.55);
+    --p4-highlight: rgba(255,230,120,.55);
 
     /* ── semantic ───────────────────────────────────── */
     --trap:     #9333ea;
@@ -378,6 +384,14 @@ body::after{
 .p2-piece{
     background:radial-gradient(circle at 35% 35%,var(--p2-highlight),var(--p2));
     box-shadow:0 0 22px var(--gp2),0 3px 10px var(--shadow-medium);
+}
+.p3-piece{
+    background:radial-gradient(circle at 35% 35%,var(--p3-highlight),var(--p3));
+    box-shadow:0 0 22px var(--gp3),0 3px 10px var(--shadow-medium);
+}
+.p4-piece{
+    background:radial-gradient(circle at 35% 35%,var(--p4-highlight),var(--p4));
+    box-shadow:0 0 22px var(--gp4),0 3px 10px var(--shadow-medium);
 }
 .trapped{
     border:2px solid var(--trap)!important;

@@ -1202,3 +1202,56 @@ Não há nada pra Gabriel testar nesta sub — server não mudou, cliente ainda 
   4. `drawSVG` em showAftermath: hoje itera `[0,1].forEach` — generalizar pra `S.players.forEach`
   5. Possivelmente quebrar em MODE-001.4a (CSS tokens + renderHeader + renderBoard) e MODE-001.4b (combat overlay + Aftermath SVG) se a sub ficar grande
 - **Atenção pra MODE-001.5** (combat overlay com 3+ dados): hoje o `#combat-overlay` em index.html tem markup hardcoded com 2 dies (`die-0`, `die-1`). Pra Royal Rumble com 3+ players, precisa renderizar dinamicamente. Provavelmente trocar pra `<div id="combat-arena">` que `showCombatUI` popula via JS
+
+---
+
+## 2026-04-29 Sessão MODE-001.4 — Cliente: renderizar 4 jogadores no tabuleiro
+**Status:** Completo
+**Branch:** —
+
+### Decisões de produto registradas
+- **Cores P3 e P4**: P3 = roxo `#c084fc`, P4 = dourado `#facc15`. Distintos de azul (P1) e vermelho (P2), bom contraste no fundo escuro. Sem feedback do Gabriel a contestar; segui a recomendação. Pode trocar editando os 6 tokens em [html/style.css:11-21](../html/style.css)
+- **`winner-text` na Aftermath agora usa cor do slot vencedor** (em vez de "p1 se foi eu, p2 se foi outro"): em 4v4 fica imediatamente claro QUEM venceu via cor. O texto "MISSÃO CUMPRIDA"/"MISSÃO FALHOU" continua refletindo perspectiva do próprio jogador
+- **Combat overlay e combat-result intocados**: ficam pra MODE-001.5 (dies dinâmicos pra 3+ participantes — hoje `index.html` ainda tem `die-0`/`die-1` hardcoded)
+
+### Feito
+- [html/style.css](../html/style.css):
+  - `:root` ganhou 6 tokens novos: `--p3` (#c084fc roxo), `--p4` (#facc15 dourado), `--gp3`/`--gp4` glows com 35% alpha, `--p3-highlight`/`--p4-highlight` com 55% alpha pra gradiente radial das peças
+  - Classes `.p3-piece` e `.p4-piece` espelhando `.p1-piece`/`.p2-piece` — radial-gradient + box-shadow
+- [html/ui.js](../html/ui.js):
+  - `renderHeader` lê `var(--p${myId+1})` e `ROMAN[myId]` em vez de ternário
+  - `setupBoardOnce` itera sobre `S.players` (em vez de `[0,1].forEach`) — cria 1 div por slot existente, classe `p${slot+1}-piece`
+  - `renderPieces` itera sobre `S.players`; só renderiza a peça do próprio jogador, oponentes aparecem como ghost nas células adjacentes (lógica preservada, agora N players)
+  - `renderBoard` usa `others = S.players.filter(p => p.id !== window.myId)` em vez de `other = S.players[1-myId]`
+  - `renderCell` faz loop em `others` pra desenhar ghost de cada oponente adjacente — em 4v4, mais de um oponente pode ocupar a mesma célula (Royal Rumble)
+  - `rollDie` cor genérica `var(--p${id+1})` + `var(--gp${id+1})`
+  - `showCombatUI` (parte de loop de dies, ainda `[0,1]`): só ternário de cor virou `var(--p${i+1})` — markup hardcoded fica pra MODE-001.5
+  - `drawSVG` (Aftermath SVG) itera `S.players.forEach(p => ...)` em vez de `[0,1].forEach` — cada jogador ganha trajeto colorido por seu slot
+  - `winner-text` cor: `var(--p${w+1})` (cor do slot vencedor) em vez de ternário 0/1
+  - `syncUI` linha 29: `S.winner !== undefined && S.winner >= 0` em vez de `S.winner===0||S.winner===1` (slots 2 e 3 também disparam Aftermath agora)
+
+### Decisões técnicas
+- **`others.filter` rodando a cada render**: 4 elementos no máximo, custo desprezível. Alternativa seria cachear no `S.opponents`, mas como o adapter de network.js já recria `S` a cada `state_update`, cachear duplicaria trabalho
+- **Ghost de múltiplos oponentes na mesma célula** (loop em vez de "primeiro encontrado"): em 4v4 com Royal Rumble, é cenário real. Cada ghost é independente — vão sobrepor visualmente se forem na mesma cor mas diferentes slots. Não é bonito (nem deveria — significa colisão iminente) mas dá pra ver o número de oponentes pelo glow expandido
+- **Não toquei no `body::before` background atmosférico** (cantos inferior-esquerdo azul + superior-direito vermelho): em 4v4 só os cantos P1/P2 ganham o tint sutil, P3/P4 não. Decisão por menor risco — mexer no gradient pode pegar mal visual com 4 tints. Se ficar feio na prática, trivial adicionar mais 2 radial-gradients lá depois
+- **Combat overlay com loop `[0,1]` mantido**: a comparação `S.players[0].roll>0 && S.players[1].roll>0` linha 296 e o cálculo `t1`/`t2` linhas 297-298 são lógica 1v1 hardcoded. Generalizar exige renderizar dies dinâmicos. Escopo de MODE-001.5
+
+### Validação
+- `node --check` em ui.js, network.js, startScreen.js
+- Grep cruzado: zero referências hardcoded em `players[0]`/`players[1]` no caminho de renderização do tabuleiro/Aftermath. Resíduos só em `showCombatUI` (escopo MODE-001.5)
+- IDs cruzados: `piece-${i}` agora é dinâmico (slot 0..N-1); CSS `.p${i+1}-piece` cobre N de 1 a 4
+- **Validação dinâmica fica com Gabriel**: quando MODE-001.5 fechar, vai dar pra destravar 4v4 e testar. Ainda assim, sub atual deve manter 1v1 idêntico — testar 1 partida 1v1 no itch.io e ver se nada regrediu
+
+### Dependências externas (Gabriel cuida)
+- **Re-zipar `html/` e atualizar upload no itch.io**: `style.css` e `ui.js` mudaram. Sem arquivo novo
+- **Server NÃO mudou** — Railway sem necessidade de redeploy
+
+### Notas para próxima sessão
+- Próxima na ordem: **MODE-001.5** — Cliente: combat overlay com 3+ dies dinâmicos. Trabalho previsto:
+  1. `index.html`: `#combat-overlay` perde `die-0` e `die-1` hardcoded; ganha `<div id="combat-arena">` que `showCombatUI` popula via JS
+  2. `ui.js showCombatUI`: cria 1 `<div class="die-wrap">` por participant em `S.pendingCombat?.participants`. Cada wrap tem label, die, hint, math
+  3. `ui.js`: cálculo de vencedor genérico — em vez de comparar `t1` vs `t2`, achar `Math.max` entre todos os totais e detectar empate no top
+  4. CSS: `.combat-arena` com flex-wrap pra 3-4 dies em mobile; tipografia das labels e dies adequada (talvez menores em 4v4)
+  5. Empate (re-roll) em 4v4: server já trata via `pendingCombat.participants` reduzido — cliente só precisa re-renderizar com novo `participants`
+- **Atenção pra MODE-001.6** (Aftermath 4 trajetos): a maior parte já está pronta nesta sub. MODE-001.6 talvez vire só ajustes finos — opacidade das paths, indicação visual do vencedor entre 4, ícones do Aftermath header. Pode ser sub curtíssima ou absorvida na próxima
+- **Toggle 4v4 pode ser destravado depois de MODE-001.5**: tabuleiro + combat overlay cobrem o gameplay. Aftermath funciona "good enough" mesmo se MODE-001.6 ainda não chegou. Decisão do Gabriel quando achar momento

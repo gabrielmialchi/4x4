@@ -26,7 +26,7 @@ const svgXY = (r,c) => { const L=getLayout(); return { x:L.PAD+c*L.STEP+L.CELL/2
 
 /* ── sync ───────────────────────────────────────────── */
 export function syncUI(){
-    if(S.winner===0||S.winner===1){showAftermath(S.winner);return;}
+    if(S.winner!==undefined&&S.winner>=0){showAftermath(S.winner);return;}
     else{document.getElementById('review-screen').style.display='none';}
 
     const allConnected = S.players.every(p => p.connected);
@@ -82,8 +82,8 @@ function renderPrivateRoom(){
 
 /* ── render board ───────────────────────────────────── */
 function renderBoard(){
-    const me    = S.players[window.myId];
-    const other = S.players[1-window.myId];
+    const me     = S.players[window.myId];
+    const others = S.players.filter(p => p.id !== window.myId);
 
     renderHeader(window.myId);
     setupBoardOnce();
@@ -93,7 +93,7 @@ function renderBoard(){
     const targetMask = !me.ready ? validSkillTargets(me.skill, me.pos, GRID_SIZE) : new Set();
     document.querySelectorAll('#grid-main .cell').forEach((cell, i) => {
         const r = Math.floor(i / GRID_SIZE), c = i % GRID_SIZE;
-        renderCell(cell, r, c, { me, other, fogMask, targetMask });
+        renderCell(cell, r, c, { me, others, fogMask, targetMask });
     });
 
     renderControls(me);
@@ -102,8 +102,8 @@ function renderBoard(){
 
 function renderHeader(myId){
     const title = document.getElementById('player-title');
-    title.innerText  = `AGENTE ${myId === 0 ? 'I' : 'II'}`;
-    title.style.color = myId === 0 ? 'var(--p1)' : 'var(--p2)';
+    title.innerText  = `AGENTE ${ROMAN[myId]}`;
+    title.style.color = `var(--p${myId+1})`;
 }
 
 function setupBoardOnce(){
@@ -118,27 +118,30 @@ function setupBoardOnce(){
         g.appendChild(cell);
     }
     const layer = document.getElementById('pieces-main');
-    [0, 1].forEach(i => {
+    S.players.forEach(p => {
         const d = document.createElement('div');
-        d.id = `piece-${i}`;
-        d.className = `piece p${i+1}-piece`;
+        d.id = `piece-${p.id}`;
+        d.className = `piece p${p.id+1}-piece`;
         layer.appendChild(d);
     });
 }
 
 function renderPieces(){
-    [0, 1].forEach(i => {
-        const piece = document.getElementById(`piece-${i}`);
-        const pos = pPos(S.players[i].pos[0], S.players[i].pos[1]);
+    S.players.forEach(p => {
+        const piece = document.getElementById(`piece-${p.id}`);
+        if(!piece) return;
+        const pos = pPos(p.pos[0], p.pos[1]);
         piece.style.top  = pos.top  + 'px';
         piece.style.left = pos.left + 'px';
-        piece.classList.toggle('trapped', S.players[i].trapped);
-        piece.style.display = (i === window.myId) ? 'block' : 'none';
+        piece.classList.toggle('trapped', p.trapped);
+        // Só renderiza a peça do próprio jogador no tabuleiro principal —
+        // oponentes só aparecem como "ghost" nas células adjacentes (renderCell).
+        piece.style.display = (p.id === window.myId) ? 'block' : 'none';
     });
 }
 
 function renderCell(cell, r, c, ctx){
-    const { me, other, fogMask, targetMask } = ctx;
+    const { me, others, fogMask, targetMask } = ctx;
     const key      = `${r},${c}`;
     const isTarget = targetMask.has(key);
     const fog      = fogMask.has(key) && !(me.skill === 'SPRINT' && isTarget);
@@ -151,8 +154,12 @@ function renderCell(cell, r, c, ctx){
 
     const adjacent = !fogMask.has(key);
     if(adjacent){
-        if(arrEq(other.pos, [r, c])){
-            cell.innerHTML += `<div style="width:26px;height:26px;border-radius:50%;background:var(--p${other.id+1});opacity:.25;box-shadow:0 0 12px var(--p${other.id+1})"></div>`;
+        // Em 4v4, mais de um oponente pode ocupar a mesma célula adjacente
+        // (Royal Rumble simultâneo). Renderiza ghost de cada um.
+        for(const other of others){
+            if(arrEq(other.pos, [r, c])){
+                cell.innerHTML += `<div style="width:26px;height:26px;border-radius:50%;background:var(--p${other.id+1});opacity:.25;box-shadow:0 0 12px var(--p${other.id+1})"></div>`;
+            }
         }
         S.blocks.forEach(b => {
             if(b.r === r && b.c === c) cell.innerHTML += `<span style="color:var(--p${b.owner+1});font-size:26px;filter:drop-shadow(0 0 4px currentColor)">◈</span>`;
@@ -234,10 +241,10 @@ window.rollDie=async (id)=>{
             die.textContent=DICE[roll];
 
             // colour the die by player
-            const color=id===0?'var(--p1)':'var(--p2)';
+            const color=`var(--p${id+1})`;
             die.style.borderColor=color;
             die.style.color=color;
-            die.style.boxShadow=`0 0 28px ${id===0?'var(--gp1)':'var(--gp2)'}`;
+            die.style.boxShadow=`0 0 28px var(--gp${id+1})`;
         }
     },55);
 };
@@ -259,10 +266,10 @@ function showCombatUI(){
             die.textContent=DICE[p.roll];
             die.classList.remove('idle','rolling');
             die.classList.add('landed');
-            const clr=i===0?'var(--p1)':'var(--p2)';
+            const clr=`var(--p${i+1})`;
             die.style.borderColor=clr;
             die.style.color=clr;
-            die.style.boxShadow=`0 0 28px ${i===0?'var(--gp1)':'var(--gp2)'}`;
+            die.style.boxShadow=`0 0 28px var(--gp${i+1})`;
             die.style.cursor='default';
             if(hint) hint.textContent='';
         } else {
@@ -307,7 +314,7 @@ function showAftermath(w){
     document.getElementById('combat-overlay').style.display='none';
     document.getElementById('review-screen').style.display='flex';
     document.getElementById('winner-text').innerText=(w===window.myId)?'MISSÃO CUMPRIDA':'MISSÃO FALHOU';
-    document.getElementById('winner-text').style.color=(w===window.myId)?'var(--p1)':'var(--p2)';
+    document.getElementById('winner-text').style.color=`var(--p${w+1})`;
 
     const grid=document.getElementById('after-grid');
     grid.innerHTML='';
@@ -336,9 +343,10 @@ function drawSVG(){
     const grid=document.getElementById('after-grid');
     svg.setAttribute('viewBox',`0 0 ${grid.offsetWidth} ${grid.offsetHeight}`);
     svg.innerHTML='';
-    [0,1].forEach(pi=>{
+    S.players.forEach(p=>{
+        const pi=p.id;
         let d='';
-        S.players[pi].history.forEach((pos,idx)=>{
+        p.history.forEach((pos,idx)=>{
             const {x,y}=svgXY(pos[0],pos[1]);
             d+=(idx===0?'M':'L')+`${x} ${y} `;
             const dot=document.createElementNS("http://www.w3.org/2000/svg","circle");

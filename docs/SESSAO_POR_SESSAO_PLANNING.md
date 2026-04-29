@@ -55,7 +55,7 @@ Backlog organizado em **Macro Tarefas** (épicos) com **sub-sessões** numeradas
 | 36 | MODE-001.1 | ✅ | Server — schema com N players + spawns 4 cantos |
 | 37 | MODE-001.2 | ✅ | Server — condição de vitória diagonal (goal por slot) |
 | 38 | MODE-001.3 | ✅ | Server — inventário 1x cada para 4v4 |
-| 39 | MODE-001.4 | ⏳ | Cliente — renderizar 4 jogadores (cores distintas) |
+| 39 | MODE-001.4 | ✅ | Cliente — renderizar 4 jogadores (cores distintas) |
 | 40 | MODE-001.5 | ⏳ | Cliente — combate Royal Rumble (3+ dados na tela) |
 | 41 | MODE-001.6 | ⏳ | Cliente — Aftermath com 4 trajetos |
 | 42 | DES-001.1 | ⏳ | i18n — sistema base `t()` + locales |
@@ -243,7 +243,7 @@ Detalhes em [versão anterior do backlog](#) preservados — checklists detalhad
 | MODE-001.1 | ✅ | Server: schema com N players + spawns 4 cantos — confirmado via smoke tests em 2026-04-29 (sem código novo; já estava pronto desde SEC-001.5/.6 e MATCH-001.2) |
 | MODE-001.2 | ✅ | Server: condição de vitória diagonal — `checkWin` genérico (Opção B aprovada): chegada simultânea no goal em qualquer modo dispara endgame combat. Removida restrição `if (room.mode === "1v1")` (concluído 2026-04-29) |
 | MODE-001.3 | ✅ | Server: inventário 1/1/1 em 4v4 — já estava em `INV_INITIAL_BY_MODE` (constants.js); confirmado via smoke test em MODE-001.1 (concluído 2026-04-29) |
-| MODE-001.4 | ⏳ | Cliente: renderizar 4 jogadores no tabuleiro com cores distintas (P1 azul, P2 vermelho, P3, P4 — definir cores em DES-002.2) |
+| MODE-001.4 | ✅ | Cliente: renderizar 4 jogadores no tabuleiro com cores distintas — P3 roxo `#c084fc`, P4 dourado `#facc15`. Tokens em :root + `.p3-piece`/`.p4-piece`. `renderHeader`/`setupBoardOnce`/`renderPieces`/`renderCell`/`rollDie`/`drawSVG`/`winner-text` generalizados pra N players (concluído 2026-04-29) |
 | MODE-001.5 | ⏳ | Cliente: tela de combate Royal Rumble — exibir 3+ dados quando 3+ jogadores colidem |
 | MODE-001.6 | ⏳ | Cliente: Aftermath com 4 trajetos coloridos |
 
