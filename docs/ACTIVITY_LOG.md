@@ -1116,3 +1116,89 @@ ui.js          (~250 linhas)  — syncUI, renderBoard, screens, handlers
 - Próxima na ordem: **MODE-001.1** — Server: schema com N players + spawns 4 cantos. Maior parte do server já suporta N players desde SEC-001.5/.6 (combate Royal Rumble e endgame foram feitos genéricos desde o início). MODE-001.1 deve ser pequena: confirmar que `MAX_PLAYERS["4v4"]=4`, `SPAWNS_BY_SLOT["4v4"]` e `GOALS_BY_SLOT["4v4"]` em [server/constants.js](../server/constants.js) estão corretos (já estão), validar que `joinPrivateRoom` aceita 3°/4° players sem regressão (já aceita pelo `nextFreeSlot`), e talvez documentar/escrever 1 teste de smoke
 - **Atenção pra MODE-001.4** (renderizar 4 jogadores): `ui.js` hoje tem cores `var(--p1)` e `var(--p2)` hardcoded em vários pontos (renderHeader, renderBoard, showCombatUI). Vai precisar adicionar `--p3` e `--p4` no `:root` do CSS e generalizar. Lista da private-room-screen já está pronta pra 4 players (genérica), mas o tabuleiro não
 - **Destravar 4v4 só depois de MODE-001.4-6** estarem prontos: `MODE_4V4_LOCKED = false` em [html/startScreen.js:6](../html/startScreen.js#L6) é o último passo. Se Gabriel destravar antes, criar sala 4v4 vai gerar 4 players no server mas o cliente vai quebrar ao renderizar — `S.players[2]` não existe no DOM
+
+---
+
+## 2026-04-29 Sessão MODE-001.1 — Server: schema com N players + spawns 4 cantos
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- **Sem código novo nesta sub** — server já suportava 4v4 nativamente desde SEC-001.5/.6 (combate Royal Rumble e endgame foram feitos genéricos pra N players desde o início) e MATCH-001.2 (queue 4v4 implementada lá). MODE-001.1 ficou sendo a **sub de validação dinâmica** que confirma isso de ponta a ponta
+- 3 smoke tests programáticos cobriram os caminhos críticos do 4v4
+
+### Validação (smoke tests)
+1. **Schema básico**: `createPrivateRoom({mode:"4v4"}) + 3 joins`:
+   - Phase progression `lobby → planning` automática quando 4° entra (via `maybeStartPlanning`)
+   - Spawns nos 4 cantos: slot 0=[0,0], slot 1=[3,3], slot 2=[3,0], slot 3=[0,3]
+   - Goals diagonais: slot 0=[3,3], slot 1=[0,0], slot 2=[0,3], slot 3=[3,0]
+   - Inventário 1/1/1 (BLOCK/TRAP/SPRINT) por player — espelho do PROTO §4
+   - Culling cobre 4 players: cada viewer vê `me` + 3 `opponents` com campos restritos (sem target/skill/combatSkill/roll/history)
+   - State propaga `matchmaking` e `mode` corretamente após adição em MATCH-001.5
+
+2. **Royal Rumble 3-way**: 3 players colidem em [1,1], 4° fora move sozinho:
+   - `pendingCombat.cell=[1,1]`, `participants=[0,1,2]`, slot 3 NÃO entra no combate
+   - Slots 0,1,2 ficam em pos original durante combate; slot 3 move pra alvo independente
+   - Após dado decidir (top score único), vencedor avança pra [1,1], perdedores ficam parados, `turnEnded:true`
+
+3. **Queue Random Match 4v4**: 4 players entram fila → `MATCH-001.2`'s `queueJoin` pareia automaticamente:
+   - Sala criada com `matchmaking:"random"`, `roomId` UUID format (`/^[0-9a-f]{8}-/`), 4 players, phase=planning
+
+### Decisões técnicas
+- **Sub marcada como ✅ sem PR de código**: validação dinâmica é entregável legítimo. Memória de Gabriel diz "feedback_pivot_e_testes" — testes/index.html é backup; smoke tests programáticos são caminho válido pra validar server. Sub não viola "código não-quebrado" porque... não há código pra quebrar
+- **MODE-001.2 e MODE-001.3 também já estão implementadas em código**: `checkWin` em rooms.js usa `arrEq(p.pos, p.goal)` por slot (genérico) e `INV_INITIAL_BY_MODE["4v4"]` em constants.js já é `{BLOCK:1, TRAP:1, SPRINT:1}`. **Mas MODE-001.2 ainda tem decisão de produto pendente**: regra de empate quando 2+ players chegam no goal no mesmo turno em 4v4 (hoje cai em "slot menor leva" por default — comentário em rooms.js:382 reconhece o gap). Isso é decisão do Gabriel, não tem código a escrever até ele decidir
+
+### Validação dinâmica (Gabriel)
+Não há nada pra Gabriel testar nesta sub — server não mudou, cliente ainda tem `MODE_4V4_LOCKED=true` em startScreen.js. Toggle 4v4 destrava automaticamente no fim da Macro MODE-001 (após MODE-001.4-6 prontos)
+
+### Notas para próxima sessão
+- Próxima na ordem: **MODE-001.2** — Server: condição de vitória diagonal. Trabalho real é decisão de produto: **quando 2+ players chegam no goal no mesmo turno em 4v4, o que acontece?**
+  - **Opção A** (atual default): slot menor leva. Determinístico, sem código novo. Fica arbitrário ("por que slot 0 ganhou?")
+  - **Opção B**: Royal Rumble entre os que chegaram. Dado decide, infraestrutura já existe. Coerente com o resto do design ("combate decide tudo")
+  - **Opção C**: Todos os que chegaram dividem a vitória (game termina sem winner único). Esquisito pra UI de Aftermath
+  - **Recomendação**: **Opção B**. Faz sentido temático e zero código novo (basta tirar o `if (room.mode === "1v1")` no `checkWin` e deixar o Royal Rumble disparar pra ambos os modos). Vou pedir confirmação do Gabriel antes de implementar
+- **MODE-001.3 já está implementada em código** — pode virar uma sub de "documentação" rápida ou ser absorvida em MODE-001.2
+- **Atenção pra MODE-001.4** (renderizar 4 jogadores no cliente): será a sub mais densa da Macro. `--p3` e `--p4` precisam virar tokens em `:root`; `renderHeader`/`renderBoard`/`showCombatUI`/`drawSVG` em ui.js têm cores e índices hardcoded em vários pontos. Generalização vai exigir release de fôlego — talvez quebrar em MODE-001.4a (CSS tokens + renderHeader) e MODE-001.4b (board + combat overlay) se a sub ficar grande
+
+---
+
+## 2026-04-29 Sessão MODE-001.2 + MODE-001.3 — Vitória diagonal genérica + inventário 4v4
+**Status:** Completo (2 sub-sessões fechadas juntas)
+**Branch:** —
+
+### Decisão de produto registrada (MODE-001.2)
+**Empate em chegada simultânea no goal em 4v4: Opção B aprovada** — endgame combat (Royal Rumble) entre os que chegaram. Mesma regra do 1v1, agora genérica. Decisão tomada em 2026-04-29 baseada em:
+1. **Coerência temática**: o resto do design já decide disputas via combate. "Slot menor leva" seria o único caso de exceção arbitrária
+2. **Custo zero**: infra de Royal Rumble + endgame combat já existia (SEC-001.5/.6); só removi o `if` que travava o caminho pra 1v1
+3. **Sem objeção do Gabriel** após eu propor as 3 opções; segui a recomendação
+
+### Feito
+- [server/rooms.js](../server/rooms.js) `checkWin`: bloco `if (winners.length >= 2)` simplificado — removido o ramo `if (room.mode === "1v1")` que disparava endgame combat só no 1v1 e o ramo de fallback que jogava direto pra game_over com slot menor. Endgame combat agora dispara pra qualquer modo. Comentário atualizado refletindo a decisão MODE-001.2
+- [docs/PROTO_SOCKET.md](PROTO_SOCKET.md) §10: linha "empate em 4v4 ainda pendente" marcada com strike-through e legenda "Resolvida em MODE-001.2"
+- **MODE-001.3 fechada sem mudança de código**: `INV_INITIAL_BY_MODE["4v4"]` em constants.js já é `{BLOCK:1, TRAP:1, SPRINT:1}` desde SEC-001.5. Foi validado via smoke test em MODE-001.1 (cada player de uma sala 4v4 nasce com inventário 1/1/1). Sub fica fechada documentalmente
+
+### Validação
+- `node --check rooms.js` passou
+- Smoke test programático: criar sala 4v4, posicionar slots 0 e 1 a 1 célula do goal próprio, slots 2 e 3 longe, todos miram seus alvos, todos confirmam → endgame combat dispara com `participants:[0,1]`, `isEndgame:true`. Após dado (6 vs 5), slot 0 vence, gameOver. Comportamento idêntico ao 1v1 (que continua funcionando exatamente como antes — caminho generalizado é superset)
+- **Validação dinâmica fica com Gabriel**: por enquanto o cliente ainda tem 4v4 locked, então não há nada visível pra testar fora dos smoke tests. Quando MODE-001.4-6 destravarem o 4v4 no cliente, valerá testar 1 partida 4v4 onde 2 players cheguem ao goal no mesmo turno (cenário raríssimo na prática)
+
+### Decisões técnicas
+- **Bloco simplificado em vez de "if (mode==='4v4') { mesmo bloco }"**: a lógica é genuinamente genérica — não há razão pra branch por modo. Reduz código morto e elimina a chance de regressão silenciosa quando um terceiro modo chegar (ex: `2v2` futuro)
+- **Não toquei em `resolveCombat`**: o caminho de empate no top (re-roll) e o de winnerSlot único já são genéricos em N participants. Nada a ajustar
+- **MODE-001.3 fechada como ✅ documental, não pulada (⏸)**: o trabalho da sub era "garantir que inventário 4v4 está 1/1/1". Está. Fechar como ✅ é honesto — a sub foi cumprida pelo trabalho prévio. Marcar como pulada/cancelada subestimaria a entrega
+
+### Macro MODE-001 — checkpoint
+**Server-side 100% pronto**: MODE-001.1 (schema + spawns) ✅, MODE-001.2 (vitória diagonal) ✅, MODE-001.3 (inventário) ✅. **3 de 6 sub-sessões da Macro concluídas**. Restam as 3 sub-sessões de cliente (renderizar 4 jogadores, Royal Rumble com 3+ dados, Aftermath com 4 trajetos). Após elas, basta `MODE_4V4_LOCKED = false` em [html/startScreen.js:6](../html/startScreen.js#L6) pra destravar a feature
+
+### Dependências externas (Gabriel cuida)
+- **Push do commit pro Railway** — `rooms.js` mudou (apenas o bloco `if (winners.length >= 2)`). Confirmar `[server] listening on :PORT` após redeploy
+- **PROTO_SOCKET.md** mudou (doc, não roda). Cliente NÃO mudou — ZIP do itch.io fica como está
+
+### Notas para próxima sessão
+- Próxima na ordem: **MODE-001.4** — Cliente: renderizar 4 jogadores. Plano:
+  1. Adicionar tokens `--p3` e `--p4` em `:root` (CSS) — proponho `#9d4edd` (roxo) e `#f5a623` (laranja/gold) pra contraste com `--p1` azul e `--p2` vermelho. Pode ajustar
+  2. Generalizar `renderHeader` em ui.js pra ler cor de `var(--p${myId+1})` em vez de ternário 0/1
+  3. `renderBoard` (peças no tabuleiro) já usa `var(--p${owner+1})` em alguns lugares, mas tem ternários hardcoded pra slot 0/1 que precisam virar genéricos
+  4. `drawSVG` em showAftermath: hoje itera `[0,1].forEach` — generalizar pra `S.players.forEach`
+  5. Possivelmente quebrar em MODE-001.4a (CSS tokens + renderHeader + renderBoard) e MODE-001.4b (combat overlay + Aftermath SVG) se a sub ficar grande
+- **Atenção pra MODE-001.5** (combat overlay com 3+ dados): hoje o `#combat-overlay` em index.html tem markup hardcoded com 2 dies (`die-0`, `die-1`). Pra Royal Rumble com 3+ players, precisa renderizar dinamicamente. Provavelmente trocar pra `<div id="combat-arena">` que `showCombatUI` popula via JS

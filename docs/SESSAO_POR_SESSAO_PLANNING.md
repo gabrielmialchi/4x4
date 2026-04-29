@@ -52,9 +52,9 @@ Backlog organizado em **Macro Tarefas** (épicos) com **sub-sessões** numeradas
 | 33 | MATCH-001.3 | ✅ | Cliente — tela inicial (Random/Private + 1v1/4v4) |
 | 34 | MATCH-001.4 | ✅ | Cliente — UI de aguardando match |
 | 35 | MATCH-001.5 | ✅ | Cliente — UI de Private Room (mostrar/copiar código) |
-| 36 | MODE-001.1 | ⏳ | Server — schema com N players + spawns 4 cantos |
-| 37 | MODE-001.2 | ⏳ | Server — condição de vitória diagonal (goal por slot) |
-| 38 | MODE-001.3 | ⏳ | Server — inventário 1x cada para 4v4 |
+| 36 | MODE-001.1 | ✅ | Server — schema com N players + spawns 4 cantos |
+| 37 | MODE-001.2 | ✅ | Server — condição de vitória diagonal (goal por slot) |
+| 38 | MODE-001.3 | ✅ | Server — inventário 1x cada para 4v4 |
 | 39 | MODE-001.4 | ⏳ | Cliente — renderizar 4 jogadores (cores distintas) |
 | 40 | MODE-001.5 | ⏳ | Cliente — combate Royal Rumble (3+ dados na tela) |
 | 41 | MODE-001.6 | ⏳ | Cliente — Aftermath com 4 trajetos |
@@ -240,14 +240,16 @@ Detalhes em [versão anterior do backlog](#) preservados — checklists detalhad
 
 | Sub-sessão | Status | Tema |
 |-----------|--------|------|
-| MODE-001.1 | ⏳ | Server: schema com N players (já preparado em SEC-001) — apenas atribuição de spawns nos 4 cantos quando `mode=="4v4"` |
-| MODE-001.2 | ⏳ | Server: condição de vitória usa `goal` por slot (já genérico desde SEC-001.6) |
-| MODE-001.3 | ⏳ | Server: inventário inicial 1x BLOCK + 1x TRAP + 1x SPRINT em `mode=="4v4"` |
+| MODE-001.1 | ✅ | Server: schema com N players + spawns 4 cantos — confirmado via smoke tests em 2026-04-29 (sem código novo; já estava pronto desde SEC-001.5/.6 e MATCH-001.2) |
+| MODE-001.2 | ✅ | Server: condição de vitória diagonal — `checkWin` genérico (Opção B aprovada): chegada simultânea no goal em qualquer modo dispara endgame combat. Removida restrição `if (room.mode === "1v1")` (concluído 2026-04-29) |
+| MODE-001.3 | ✅ | Server: inventário 1/1/1 em 4v4 — já estava em `INV_INITIAL_BY_MODE` (constants.js); confirmado via smoke test em MODE-001.1 (concluído 2026-04-29) |
 | MODE-001.4 | ⏳ | Cliente: renderizar 4 jogadores no tabuleiro com cores distintas (P1 azul, P2 vermelho, P3, P4 — definir cores em DES-002.2) |
 | MODE-001.5 | ⏳ | Cliente: tela de combate Royal Rumble — exibir 3+ dados quando 3+ jogadores colidem |
 | MODE-001.6 | ⏳ | Cliente: Aftermath com 4 trajetos coloridos |
 
-**Decisão pendente:** empate em Royal Rumble (mais de um player com mesmo top score). Proposta: re-roll só entre os empatados, mantendo regra do tie-breaker do 1v1. Confirmar com Gerente quando MODE-001.5 chegar.
+**Decisões resolvidas (2026-04-29):**
+- Empate em chegada simultânea no goal (4v4): **endgame combat (Royal Rumble) genérico** (Opção B). Mesma regra do 1v1, agora vale pra qualquer número de players que chegam no mesmo turno.
+- Empate no top do Royal Rumble (combate normal): re-roll só entre os empatados — já implementado em `resolveCombat` desde SEC-001.5.
 
 ---
 

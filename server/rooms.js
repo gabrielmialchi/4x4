@@ -471,24 +471,22 @@ function checkWin(room) {
     return { gameOver: true, winnerSlot: winners[0] };
   }
   if (winners.length >= 2) {
-    // Endgame tie-breaker do 1v1 (combate final). Para 4v4 a regra ainda é pendente
-    // (PROTO_SOCKET §10); por hora o de slot menor leva — caso raríssimo de chegada simultânea.
-    if (room.mode === "1v1") {
-      room.isEndgame = true;
-      room.phase = "combat";
-      room.pendingCombat = {
-        cell: null,
-        participants: winners,
-        rolls: Object.fromEntries(winners.map((s) => [s, 0])),
-        resolveAt: null,
-        isEndgame: true,
-      };
-      for (const p of room.players) p.roll = 0;
-      return { combatStarted: true, isEndgame: true };
-    }
-    room.phase = "game_over";
-    room.winner = winners[0];
-    return { gameOver: true, winnerSlot: winners[0] };
+    // Endgame combat genérico: chegada simultânea no goal → Royal Rumble entre quem
+    // chegou. Decisão MODE-001.2 (2026-04-29): vale pra 1v1 e 4v4 — a infra é a mesma,
+    // dado decide entre os que chegaram (consistente com o resto do design "combate
+    // resolve disputas"). Empate no top do endgame faz re-roll só entre empatados (já
+    // tratado em resolveCombat).
+    room.isEndgame = true;
+    room.phase = "combat";
+    room.pendingCombat = {
+      cell: null,
+      participants: winners,
+      rolls: Object.fromEntries(winners.map((s) => [s, 0])),
+      resolveAt: null,
+      isEndgame: true,
+    };
+    for (const p of room.players) p.roll = 0;
+    return { combatStarted: true, isEndgame: true };
   }
   return null;
 }

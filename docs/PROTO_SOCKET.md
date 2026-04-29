@@ -278,6 +278,7 @@ Itens identificados que não fazem parte da Alpha mas precisam ser decididos ant
 | **AFK timeout em planning** | Não existe — jogador pode travar a sala saindo | Sub-sessão futura se necessário (ex: `RULE-002`); na spec Alpha, ausência preservada |
 | **Reconexão formal** | Cair = entrar como novo player | SEC-001.12 (hardening) |
 | **Histórico de partidas / contas de jogador** | Não existe | Fora do escopo MVP |
+| **~~Empate em chegada simultânea no 4v4~~** | ~~Resolvida em MODE-001.2 (2026-04-29): endgame combat (Royal Rumble) entre os que chegaram no mesmo turno; dado decide. Mesma regra do 1v1, agora genérica em `checkWin`~~ | ✅ |
 | **Auth** | Anônimo, qualquer um com URL/código entra | Fora do escopo MVP |
 
 ---
