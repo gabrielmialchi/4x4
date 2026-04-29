@@ -4,6 +4,8 @@
 // renderiza o state_for_me que vem de volta. Adaptador converte o schema cullado
 // (me + opponents) para o schema antigo (.players[]) que ui.js/combat.js consomem.
 
+import { showStartScreen, showSearchingScreen, notifyMatchFound } from "./startScreen.js";
+
 // URL do server hospedado no Railway. socket.io-client converte para wss://
 // automaticamente (HTTPS).
 const SERVER_URL = "https://4x4-production.up.railway.app";
@@ -74,6 +76,7 @@ function adaptStateForMe(state) {
         phase: state.phase,
         winner: state.winner,
         isEndgame: state.isEndgame,
+        matchmaking: state.matchmaking,
     };
 }
 
@@ -102,6 +105,7 @@ function adaptFullState(fullState) {
         phase: fullState.phase,
         winner: fullState.winner,
         isEndgame: fullState.isEndgame,
+        matchmaking: fullState.matchmaking,
     };
 }
 
@@ -161,6 +165,16 @@ export async function initMultiplayer(onStateChange) {
         if (_onStateChange) _onStateChange();
     });
 
+    // match_found vem após queue_join pareou — atualiza window.roomId/myId pra
+    // que a transição de UI funcione igual ao create_private_room/join_private_room
+    socket.on("match_found", ({ roomId, mySlot, state }) => {
+        window.roomId = roomId;
+        window.myId = mySlot;
+        window.S = adaptStateForMe(state);
+        notifyMatchFound(); // fecha a tela "Procurando..." se ela estiver ativa
+        if (_onStateChange) _onStateChange();
+    });
+
     socket.on("opponent_disconnected", () => {
         // state_update separado já cobre; este evento é só sinalização lateral
     });
@@ -171,7 +185,9 @@ export async function initMultiplayer(onStateChange) {
         socket.once("connect", resolve);
     });
 
-    // Roteamento: URL com ?sala=XXXX entra; sem, cria nova
+    // Roteamento:
+    //   1) URL tem ?sala=XXXX → join direto (atalho de link compartilhado)
+    //   2) Sem ?sala → loop showStartScreen → ação escolhida; Random pode cancelar e voltar
     if (window.roomId) {
         const ack = await emit("join_private_room", { roomId: window.roomId });
         if (ack?.error) {
@@ -180,15 +196,54 @@ export async function initMultiplayer(onStateChange) {
         }
         window.myId = ack.mySlot;
     } else {
-        // Modo de partida hardcoded em 1v1. UI de escolha 1v1/4v4 vem em MATCH-001.
-        const ack = await emit("create_private_room", { mode: "1v1" });
-        if (ack?.error) {
-            alert(`Erro ao criar sala: ${ack.error.code}`);
-            return;
+        // Loop: jogador pode cancelar Random Match e voltar pro start-screen
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+            const choice = await showStartScreen();
+
+            if (choice.action === "random") {
+                const ack = await emit("queue_join", { mode: choice.mode });
+                if (ack?.error) {
+                    alert(`Erro ao entrar na fila: ${ack.error.code}`);
+                    continue;
+                }
+                const { result } = await showSearchingScreen();
+                if (result === "cancelled") {
+                    await emit("queue_leave", {});
+                    continue; // volta pro start-screen
+                }
+                // matched: window.roomId/myId já foram setados pelo handler match_found
+                break;
+            }
+
+            if (choice.action === "createPrivate") {
+                const ack = await emit("create_private_room", { mode: choice.mode });
+                if (ack?.error) {
+                    alert(`Erro ao criar sala: ${ack.error.code}`);
+                    continue;
+                }
+                window.roomId = ack.roomId;
+                window.myId = ack.mySlot;
+                window.history.replaceState(null, null, `?sala=${window.roomId}`);
+                break;
+            }
+
+            if (choice.action === "joinPrivate") {
+                const ack = await emit("join_private_room", { roomId: choice.roomId });
+                if (ack?.error) {
+                    alert(`Erro ao entrar na sala: ${ack.error.code}`);
+                    continue;
+                }
+                window.roomId = choice.roomId.toUpperCase();
+                window.myId = ack.mySlot;
+                window.history.replaceState(null, null, `?sala=${window.roomId}`);
+                break;
+            }
         }
-        window.roomId = ack.roomId;
-        window.myId = ack.mySlot;
-        window.history.replaceState(null, null, `?sala=${window.roomId}`);
     }
-    document.getElementById("invite-link").innerText = window.location.href;
+
+    // Random Match pareou: state já chegou via match_found → syncUI vai mostrar
+    // game-container direto (ambos players connected). Pra Private, syncUI vai
+    // mostrar a private-room-screen sozinha quando detectar slot vazio + matchmaking
+    // privado — não precisa setar display aqui.
 }

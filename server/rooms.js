@@ -1,4 +1,4 @@
-import { randomInt } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { generateRoomCode } from "./codes.js";
 import {
   MAX_PLAYERS,
@@ -11,6 +11,8 @@ import { arrEq, manhattanDist, isReachableTarget, canPlaceSkillOnBase } from "./
 // Estado em RAM. Persistência (Redis) só em pós-Alpha — ver PROTO_SOCKET §11.
 const rooms = new Map();          // roomId -> RoomState
 const socketToRoom = new Map();   // socketId -> roomId (lookup reverso)
+const queues = new Map();         // mode -> [socketId, ...] (FIFO por modo, PROTO §11)
+const socketToQueue = new Map();  // socketId -> mode (lookup reverso)
 
 const STALE_ROOM_MS = 5 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = 60 * 1000;
@@ -106,15 +108,22 @@ export function createPrivateRoom({ mode, socketId }) {
 export function joinPrivateRoom({ roomId, socketId }) {
   if (socketToRoom.has(socketId)) return { error: "ALREADY_IN_QUEUE_OR_ROOM" };
 
-  const room = rooms.get(roomId);
+  // Códigos são gerados em uppercase (codes.js); aceitar minúsculas no input
+  // evita ROOM_NOT_FOUND quando usuário cola "abcd" em vez de "ABCD"
+  const normalizedId = String(roomId).toUpperCase();
+  const room = rooms.get(normalizedId);
   if (!room) return { error: "ROOM_NOT_FOUND" };
+
+  // Salas de Random Match (matchmaking: "random") não aceitam join por código —
+  // são pareadas via fila. Sem este guard, MATCH-001.2 vai criar buraco.
+  if (room.matchmaking !== "private") return { error: "ROOM_NOT_PRIVATE" };
 
   const slot = nextFreeSlot(room);
   if (slot === -1) return { error: "ROOM_FULL" };
 
   room.players.push(makePlayer({ slot, mode: room.mode, socketId }));
   room.disconnectedAt = null;
-  socketToRoom.set(socketId, roomId);
+  socketToRoom.set(socketId, normalizedId);
   maybeStartPlanning(room);
   return { room, mySlot: slot };
 }
@@ -137,8 +146,11 @@ export function leaveRoom({ socketId }) {
   return { roomId, room, slot: player?.slot ?? null };
 }
 
-// Reconexão formal só em SEC-001.12 — disconnect aqui marca connected=false.
+// Reconexão formal só em pós-Alpha — disconnect aqui marca connected=false.
+// Também limpa o socket de qualquer fila Random Match em que estivesse esperando.
 export function markDisconnected({ socketId }) {
+  removeFromQueue(socketId);
+
   const roomId = socketToRoom.get(socketId);
   if (!roomId) return null;
 
@@ -150,6 +162,86 @@ export function markDisconnected({ socketId }) {
   if (player) player.connected = false;
   if (room.players.every((p) => !p.connected)) room.disconnectedAt = Date.now();
   return { roomId, room, slot: player?.slot ?? null };
+}
+
+// ─── Random Match queue ──────────────────────────────────────────────────────
+
+function getQueue(mode) {
+  let q = queues.get(mode);
+  if (!q) {
+    q = [];
+    queues.set(mode, q);
+  }
+  return q;
+}
+
+function removeFromQueue(socketId) {
+  const mode = socketToQueue.get(socketId);
+  if (!mode) return false;
+  socketToQueue.delete(socketId);
+  const q = queues.get(mode);
+  if (!q) return false;
+  const idx = q.indexOf(socketId);
+  if (idx !== -1) q.splice(idx, 1);
+  return true;
+}
+
+// Cria sala random a partir dos N primeiros socketIds da fila do `mode`.
+// Slot é atribuído pela ordem de chegada na fila — primeiro a entrar pega slot 0.
+function createRandomRoom(mode, socketIds) {
+  let roomId;
+  do {
+    roomId = randomUUID();
+  } while (rooms.has(roomId));
+
+  const room = {
+    roomId,
+    mode,
+    matchmaking: "random",
+    phase: "lobby",
+    winner: -1,
+    isEndgame: false,
+    players: socketIds.map((sid, slot) => makePlayer({ slot, mode, socketId: sid })),
+    blocks: [],
+    traps: [],
+    spentRes: [],
+    combatLocs: [],
+    pendingCombat: null,
+    createdAt: Date.now(),
+    disconnectedAt: null,
+  };
+
+  rooms.set(roomId, room);
+  for (const sid of socketIds) socketToRoom.set(sid, roomId);
+  maybeStartPlanning(room); // todos os slots preenchidos e conectados → planning
+  return room;
+}
+
+export function queueJoin({ mode, socketId }) {
+  if (!isValidMode(mode)) return { error: "INVALID_MODE" };
+  if (socketToRoom.has(socketId) || socketToQueue.has(socketId)) {
+    return { error: "ALREADY_IN_QUEUE_OR_ROOM" };
+  }
+
+  const q = getQueue(mode);
+  q.push(socketId);
+  socketToQueue.set(socketId, mode);
+
+  // Pareou? Tira os N primeiros e cria sala. Demais ficam esperando próximo grupo.
+  const need = MAX_PLAYERS[mode];
+  if (q.length >= need) {
+    const matched = q.splice(0, need);
+    for (const sid of matched) socketToQueue.delete(sid);
+    const room = createRandomRoom(mode, matched);
+    return { matched, room };
+  }
+  return { queued: true };
+}
+
+// Idempotente: cliente que cancela duas vezes não recebe erro.
+export function queueLeave({ socketId }) {
+  removeFromQueue(socketId);
+  return { ok: true };
 }
 
 // ─── Planning handlers ───────────────────────────────────────────────────────

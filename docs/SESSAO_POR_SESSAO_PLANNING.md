@@ -46,12 +46,12 @@ Backlog organizado em **Macro Tarefas** (épicos) com **sub-sessões** numeradas
 | 27 | SEC-001.9 | ⏸ | Validação de paridade Firebase ↔ Server (pulada por decisão do Gerente em 2026-04-28; Firebase ainda vivo até SEC-001.11 como rede de segurança) |
 | 28 | SEC-001.10 | ✅ | Promoção: `USE_SERVER=true` permanente |
 | 29 | SEC-001.11 | ✅ | Descontinuar Firebase |
-| 30 | SEC-001.12 | ⏳ | Hardening: rate limit, validação, graceful shutdown |
-| 31 | MATCH-001.1 | ⏳ | Matchmaking — Private Room no server (código ABCD) |
-| 32 | MATCH-001.2 | ⏳ | Matchmaking — Random Match queue no server |
-| 33 | MATCH-001.3 | ⏳ | Cliente — tela inicial (Random/Private + 1v1/4v4) |
-| 34 | MATCH-001.4 | ⏳ | Cliente — UI de aguardando match |
-| 35 | MATCH-001.5 | ⏳ | Cliente — UI de Private Room (mostrar/copiar código) |
+| 30 | SEC-001.12 | ✅ | Hardening: rate limit, validação, graceful shutdown |
+| 31 | MATCH-001.1 | ✅ | Matchmaking — Private Room no server (código ABCD) |
+| 32 | MATCH-001.2 | ✅ | Matchmaking — Random Match queue no server |
+| 33 | MATCH-001.3 | ✅ | Cliente — tela inicial (Random/Private + 1v1/4v4) |
+| 34 | MATCH-001.4 | ✅ | Cliente — UI de aguardando match |
+| 35 | MATCH-001.5 | ✅ | Cliente — UI de Private Room (mostrar/copiar código) |
 | 36 | MODE-001.1 | ⏳ | Server — schema com N players + spawns 4 cantos |
 | 37 | MODE-001.2 | ⏳ | Server — condição de vitória diagonal (goal por slot) |
 | 38 | MODE-001.3 | ⏳ | Server — inventário 1x cada para 4v4 |
@@ -103,7 +103,7 @@ Backlog organizado em **Macro Tarefas** (épicos) com **sub-sessões** numeradas
 | SEC-001.9 | ⏸ | Validação de paridade Firebase ↔ Server (smoke test alternando flag) (pulada 2026-04-28 — roteiro pronto em PARIDADE_REPORT.md, revisitar se bug aparecer) |
 | SEC-001.10 | ✅ | Promoção: `USE_SERVER=true` permanente (concluído 2026-04-28 — server no Railway, cliente no itch.io) |
 | SEC-001.11 | ✅ | Descontinuar Firebase — SDK, config, chave, initFirebaseMode, branches duais e `combat.js` host* removidos (concluído 2026-04-28) |
-| SEC-001.12 | ⏳ | Hardening: rate limit, validação input, graceful shutdown, uncaughtException |
+| SEC-001.12 | ✅ | Hardening: rate limit (token bucket 30/s), validação defensiva de payload, `maxHttpBufferSize=4096`, uncaughtException/unhandledRejection, ping sem eco (concluído 2026-04-28) |
 
 **Nota de design (importante):** SEC-001.5 (combate) e SEC-001.6 (vitória) são implementados desde o início suportando **N players** e **goal por slot**. Isso significa que MODE-001 (4v4) é majoritariamente cliente — o server já está pronto. Decisão: pagar um pouco mais de custo no SEC-001 para evitar refator no MODE-001.
 
@@ -216,11 +216,11 @@ Detalhes em [versão anterior do backlog](#) preservados — checklists detalhad
 
 | Sub-sessão | Status | Tema |
 |-----------|--------|------|
-| MATCH-001.1 | ⏳ | Server: lifecycle de Private Room — `create_private_room` gera código ABCD único; `join_private_room` valida e adiciona |
-| MATCH-001.2 | ⏳ | Server: fila de Random Match — `queue_join`/`queue_leave`, pareamento automático quando há jogadores suficientes para o modo escolhido |
-| MATCH-001.3 | ⏳ | Cliente: tela inicial — escolher matchmaking (Random / Private) e modo de partida (1v1 / 4v4) |
-| MATCH-001.4 | ⏳ | Cliente: UI de aguardando match (Random) — animação de "procurando", botão cancelar |
-| MATCH-001.5 | ⏳ | Cliente: UI de Private Room — mostrar código grande, botão copiar, lista de jogadores na sala, botão iniciar quando todos prontos |
+| MATCH-001.1 | ✅ | Server: lifecycle de Private Room — base já existia (SEC-001.3); fechado em 2026-04-28 com guard `matchmaking==="private"` no join (preparação pra MATCH-001.2), normalização de `roomId` pra uppercase, novos códigos de erro `ROOM_NOT_PRIVATE`/`INVALID_PAYLOAD`/`INVALID_MODE`, e PROTO_SOCKET §6.1/§7/§8 atualizado pra refletir contrato real (ack-based) |
+| MATCH-001.2 | ✅ | Server: fila de Random Match — `queue_join`/`queue_leave`, pareamento FIFO automático por modo, sala criada com `matchmaking:"random"` e `roomId` UUID, emit `match_found` cullado pra cada matched (concluído 2026-04-29) |
+| MATCH-001.3 | ✅ | Cliente: tela inicial — overlay com toggle 1v1/4v4 (4v4 disabled "EM BREVE" até MODE-001) e 3 caminhos: Procurar oponente / Criar sala privada / Entrar com código. URL `?sala=XXXX` continua sendo atalho de link compartilhado. Concluído 2026-04-29 |
+| MATCH-001.4 | ✅ | Cliente: UI de aguardando match (Random) — `#searching-screen` com animação de 3 dots pulsantes + botão CANCELAR. Cancel emite `queue_leave` e volta pro start-screen via loop em `initMultiplayer`. Concluído 2026-04-29 |
+| MATCH-001.5 | ✅ | Cliente: UI de Private Room — `#private-room-screen` substitui o `#lobby-screen` reaproveitado: código ABCD em fonte mono grande, botões "COPIAR CÓDIGO"/"COPIAR LINK", lista de slots com indicador de conectado/aguardando (genérica até 4 players, pronta pra MODE-001). Concluído 2026-04-29 |
 
 ---
 

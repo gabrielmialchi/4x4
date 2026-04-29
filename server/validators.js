@@ -33,3 +33,15 @@ export function canPlaceSkillOnBase(player, skill) {
   if (skill !== "BLOCK" && skill !== "TRAP") return true;
   return !arrEq(player.pos, player.spawn);
 }
+
+// Guards defensivos para payloads de socket. Cliente real sempre envia objetos planos;
+// estes barram payloads bizarros (string, número, array) antes que cheguem aos handlers
+// que esperam `payload?.campo` e poderiam crashar com tipos inesperados.
+export function isPlainPayload(p) {
+  return p === undefined || p === null ||
+    (typeof p === "object" && !Array.isArray(p));
+}
+
+export function isShortString(s, maxLen = 64) {
+  return typeof s === "string" && s.length > 0 && s.length <= maxLen;
+}

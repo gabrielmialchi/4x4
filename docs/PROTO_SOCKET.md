@@ -185,12 +185,18 @@ Server envia `full_state` completo (sem culling) para a tela Aftermath funcionar
 
 ### 6.1 Matchmaking
 
-| Evento | Payload | Validações | Resposta |
+Respostas de matchmaking usam **ack callback** (Socket.io) em vez de eventos S→C dedicados — equivalente semântico, evita duplicação. Estado da sala chega ao cliente pelo `state_update` que o server emite logo em seguida ao `broadcastState` da sala.
+
+| Evento | Payload | Validações | Resposta (ack) |
 |--------|---------|-----------|----------|
-| `queue_join` | `{ mode: "1v1" \| "4v4" }` | jogador não está em outra fila/sala | `queued` ou `error` |
-| `queue_leave` | `{}` | jogador está na fila | `queue_left` |
-| `create_private_room` | `{ mode: "1v1" \| "4v4" }` | nenhuma | `room_created { roomId, mySlot:0 }` |
-| `join_private_room` | `{ roomId }` | sala existe; `matchmaking == "private"`; tem vaga | `joined { mySlot }` ou `error` |
+| `queue_join` | `{ mode: "1v1" \| "4v4" }` | jogador não está em outra fila/sala | `{ ok: true }` ou `{ error: { code } }` (ver §8) |
+| `queue_leave` | `{}` | jogador está na fila | `{ ok: true }` |
+| `create_private_room` | `{ mode: "1v1" \| "4v4" }` | mode válido; jogador não está em outra fila/sala | `{ roomId, mySlot: 0 }` ou `{ error: { code } }` |
+| `join_private_room` | `{ roomId }` | sala existe; `matchmaking == "private"`; tem vaga; jogador não está em outra fila/sala | `{ mySlot }` ou `{ error: { code } }` |
+
+**Notas de implementação:**
+- `roomId` é normalizado para uppercase antes do lookup — usuário pode digitar/colar `abcd` ou `ABCD` indistintamente
+- Após `create`/`join`/`match_found`, o cliente recebe o estado completo via `state_update` broadcast (PROTO §7)
 
 ### 6.2 Em sala (gameplay)
 
@@ -212,11 +218,8 @@ Server envia `full_state` completo (sem culling) para a tela Aftermath funcionar
 
 | Evento | Payload | Quando dispara |
 |--------|---------|----------------|
-| `queued` | `{ mode, position }` | Após `queue_join` (info para UI "aguardando") |
-| `match_found` | `{ roomId, mySlot, state: StateForMe }` | Quando fila tem players suficientes |
-| `room_created` | `{ roomId, mySlot:0 }` | Após `create_private_room` |
-| `joined` | `{ mySlot, state: StateForMe }` | Após `join_private_room` ou `match_found` |
-| `state_update` | `{ state: StateForMe }` | A cada mudança relevante; específico por destinatário |
+| `match_found` | `{ roomId, mySlot, state: StateForMe }` | Quando fila tem players suficientes (MATCH-001.2) |
+| `state_update` | `{ state: StateForMe }` | A cada mudança relevante; específico por destinatário. Também é o caminho pelo qual o joiner/criador recebe o estado inicial após `create_private_room`/`join_private_room` (cuja resposta direta vai pelo ack) |
 | `combat_started` | `{ pendingCombat: PendingCombatView, state: StateForMe }` | Quando 2+ players colidem em alvos |
 | `trap_triggered` | `{ cell, by_owner_slot, state: StateForMe }` | Quando alguém pisa numa TRAP de outro player |
 | `combat_resolved` | `{ result: { winnerSlot, scores: { [slot]: {dice, mod, total} } }, state: StateForMe }` | Após `COMBAT_REVEAL_MS` com todos rolados |
@@ -232,7 +235,10 @@ Server envia `full_state` completo (sem culling) para a tela Aftermath funcionar
 | Código | Quando |
 |--------|--------|
 | `ROOM_NOT_FOUND` | `join_private_room` em sala inexistente |
+| `ROOM_NOT_PRIVATE` | `join_private_room` numa sala de Random Match (entrada por código não permitida) |
 | `ROOM_FULL` | sala já tem todos os slots ocupados |
+| `INVALID_PAYLOAD` | payload do evento não é um objeto plano (rejeitado pelo wrapper de hardening — SEC-001.12) |
+| `INVALID_MODE` | `create_private_room`/`queue_join` com `mode` ≠ `"1v1"` e ≠ `"4v4"` |
 | `INVALID_TARGET` | alvo fora do tabuleiro ou distância Manhattan inválida |
 | `INVALID_SPRINT_TARGET` | SPRINT com alvo não-reto ou fora do alcance de 2 |
 | `NO_INVENTORY` | `set_skill` para skill com `inv[skill] === 0` |

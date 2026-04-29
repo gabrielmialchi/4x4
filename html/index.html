@@ -10,13 +10,62 @@
 </head>
 <body>
 
-<!-- LOBBY -->
-<div id="lobby-screen">
+<!-- START SCREEN (MATCH-001.3) — escolha de matchmaking + modo. Aparece antes do lobby
+     a menos que a URL já traga ?sala=XXXX (atalho de link compartilhado). -->
+<div id="start-screen">
     <div class="lobby-title"><em>4</em> × <em>4</em></div>
     <div class="gold-line"></div>
-    <p style="font-size:12px;letter-spacing:3px;color:var(--dim);text-transform:uppercase">Aguardando segundo agente</p>
-    <div class="link-box" id="invite-link" onclick="copyLink()">Gerando link...</div>
-    <button onclick="copyLink()" style="border-color:var(--p1);color:var(--p1)">COPIAR LINK</button>
+
+    <div class="ss-section">
+        <div class="ss-section-label">Modo</div>
+        <div class="ss-mode-toggle">
+            <button id="ss-mode-1v1" class="ss-mode-btn">1v1</button>
+            <button id="ss-mode-4v4" class="ss-mode-btn">
+                4v4 <span class="ss-badge">EM BREVE</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="ss-section ss-actions">
+        <button id="ss-btn-random" class="ss-action-btn ss-action-primary">PROCURAR OPONENTE</button>
+        <button id="ss-btn-create" class="ss-action-btn">CRIAR SALA PRIVADA</button>
+
+        <div class="ss-join-row">
+            <input id="ss-input-code" class="ss-input" type="text" maxlength="4"
+                   placeholder="CÓDIGO" autocomplete="off" autocapitalize="characters">
+            <button id="ss-btn-join" class="ss-action-btn ss-action-compact">ENTRAR</button>
+        </div>
+    </div>
+
+    <div id="ss-error" class="ss-error" style="display:none"></div>
+</div>
+
+<!-- PRIVATE ROOM (MATCH-001.5) — exibida pós-create/join de sala privada enquanto não fecha -->
+<div id="private-room-screen" style="display:none">
+    <div class="lobby-title"><em>4</em> × <em>4</em></div>
+    <div class="gold-line"></div>
+    <p class="private-label">Sala privada</p>
+
+    <div id="private-code" class="private-code" onclick="copyCode()" title="Clique para copiar">····</div>
+
+    <div class="private-buttons">
+        <button onclick="copyCode()" style="border-color:var(--gold);color:var(--gold)">COPIAR CÓDIGO</button>
+        <button onclick="copyLink()" style="border-color:var(--p1);color:var(--p1)">COPIAR LINK</button>
+    </div>
+
+    <div class="private-players">
+        <div class="private-players-title">JOGADORES <span id="private-players-count">0/0</span></div>
+        <div id="private-players-list"></div>
+    </div>
+</div>
+
+<!-- SEARCHING (Random Match) — animação enquanto a fila não pareia -->
+<div id="searching-screen" style="display:none">
+    <div class="lobby-title"><em>4</em> × <em>4</em></div>
+    <div class="gold-line"></div>
+    <p class="searching-label">Procurando oponente</p>
+    <div class="searching-dots"><span></span><span></span><span></span></div>
+    <button id="searching-btn-cancel" class="ss-action-btn searching-cancel">CANCELAR</button>
 </div>
 
 <!-- GAME -->

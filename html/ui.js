@@ -29,13 +29,22 @@ export function syncUI(){
     if(S.winner===0||S.winner===1){showAftermath(S.winner);return;}
     else{document.getElementById('review-screen').style.display='none';}
 
-    if(S.players[0].connected&&S.players[1].connected){
-        document.getElementById('lobby-screen').style.display='none';
+    const allConnected = S.players.every(p => p.connected);
+
+    if(allConnected){
+        document.getElementById('private-room-screen').style.display='none';
         if(S.phase!=="combat") document.getElementById('game-container').style.display='flex';
-    } else {
-        document.getElementById('lobby-screen').style.display='flex';
+    } else if(S.matchmaking === "private"){
+        // Sala privada com slot vazio: mostra tela de "aguardando" com código + lista
+        document.getElementById('private-room-screen').style.display='flex';
         document.getElementById('game-container').style.display='none';
         document.getElementById('combat-overlay').style.display='none';
+        renderPrivateRoom();
+        return;
+    } else {
+        // Random Match com slot vazio: oponente caiu pós-pareamento. Mantém o tabuleiro
+        // visível pra o jogador ver onde estava — sem tela específica até hardening de reconnect
+        document.getElementById('private-room-screen').style.display='none';
         return;
     }
 
@@ -44,6 +53,30 @@ export function syncUI(){
     } else {
         document.getElementById('combat-overlay').style.display='none';
         renderBoard();
+    }
+}
+
+/* ── private room (MATCH-001.5) ────────────────────── */
+const ROMAN = ['I','II','III','IV'];
+function renderPrivateRoom(){
+    const codeEl = document.getElementById('private-code');
+    if(window.roomId) codeEl.textContent = window.roomId;
+
+    const total = S.players.length;
+    const connected = S.players.filter(p => p.connected).length;
+    document.getElementById('private-players-count').textContent = `${connected}/${total}`;
+
+    const list = document.getElementById('private-players-list');
+    list.innerHTML = '';
+    for(const p of S.players){
+        const isMe = p.id === window.myId;
+        const div = document.createElement('div');
+        div.className = 'private-player-slot' + (p.connected ? ' connected' : ' empty');
+        const label = p.connected
+            ? (isMe ? `Você — Agente ${ROMAN[p.id]}` : `Agente ${ROMAN[p.id]}`)
+            : 'Aguardando…';
+        div.innerHTML = `<span class="dot"></span><span>${label}</span>`;
+        list.appendChild(div);
     }
 }
 
@@ -269,7 +302,7 @@ function showCombatUI(){
 
 /* ── aftermath ──────────────────────────────────────── */
 function showAftermath(w){
-    document.getElementById('lobby-screen').style.display='none';
+    document.getElementById('private-room-screen').style.display='none';
     document.getElementById('game-container').style.display='none';
     document.getElementById('combat-overlay').style.display='none';
     document.getElementById('review-screen').style.display='flex';
@@ -330,3 +363,4 @@ window.restartGame=()=>{
 };
 
 window.copyLink=()=>{ navigator.clipboard.writeText(window.location.href); alert("Link copiado."); };
+window.copyCode=()=>{ if(window.roomId){ navigator.clipboard.writeText(window.roomId); alert(`Código ${window.roomId} copiado.`); } };

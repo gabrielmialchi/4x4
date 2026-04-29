@@ -845,3 +845,274 @@ ui.js          (~250 linhas)  — syncUI, renderBoard, screens, handlers
 ### Notas para próxima sessão
 - Próxima na ordem: **SEC-001.12** — hardening do server. Itens previstos: rate limit por socket (proteção contra spam de emits), validação dos payloads de entrada (hoje rooms.js confia no shape, exemplo: `set_target` com `target` não-array crasha o `arrEq`), graceful shutdown (SIGTERM do Railway → desconectar todos antes de matar processo), `process.on('uncaughtException')` para logging em vez de crash silencioso. Reconexão (PROTO_SOCKET §10) também pode entrar aqui dependendo do escopo. Última sub da Macro SEC-001 antes de seguir pra MATCH-001
 - **Sugestão de schedule:** quando MATCH-001.1 chegar (Private Room formal), valeria abrir um agente de cleanup pra remover o atalho de DEV `/jogo` em [server/server.js](../server/server.js) — útil hoje porque cliente e server compartilham origem em desenvolvimento, mas em produção o cliente vive em `itch.io`/`itch.zone` (CORS já cobre). Não é urgente
+
+---
+
+## 2026-04-28 Sessão SEC-001.12 — Hardening do server
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- [server/server.js](../server/server.js):
+  - `maxHttpBufferSize: 4096` no `new Server(...)` — payloads do jogo são minúsculos (≤30 bytes); antes era o default de 1 MB, suficiente pra ataque de saturação de memória
+  - `process.on("uncaughtException")` e `process.on("unhandledRejection")` — log e segue vivo. Bug isolado num handler não derruba mais o processo inteiro (todas as salas ativas iam junto antes)
+  - `ping` deixou de ecoar `payload`: antes respondia `{ pong, echoed: payload, t }` — attacker mandava blob grande e server reecoava (amplification). Agora só `{ pong, t }`
+  - Wrapper `guarded(socket, handler)` aplicado em todos os handlers de evento — rate-limita o evento e rejeita payloads que não sejam objeto plano (ex: array, string, número)
+  - `join_private_room` ganhou guard explícito: `roomId` precisa ser string curta (≤64 chars). Cliente real envia 4 chars; rejeitar antes de chegar ao `Map.get` evita lookups com tipos esquisitos
+  - `disconnect` chama `release(socket.id)` — limpa entrada no bucket do rate limiter pra não vazar memória ao longo do dia
+- [server/rateLimit.js](../server/rateLimit.js) **novo**: token bucket por socket. Capacidade 30, refill 30/s. Cliente real envia <5 eventos/s no pico; abusador em loop atinge o teto e tem mensagens descartadas silenciosamente (sem ack — não desconectar pra não dar feedback claro pro atacante)
+- [server/validators.js](../server/validators.js): exportados `isPlainPayload(p)` e `isShortString(s, max)` — usados pelo wrapper e pelo `join_private_room`. Demais campos (`mode`, `skill`, `target`) já tinham whitelist/`isOnBoard` no caminho de `rooms.js`, então a defesa adicional ficaria redundante
+
+### Decisões técnicas
+- **Rate limit descarta silenciosamente em vez de desconectar**: cliente honesto NUNCA atinge 30 eventos/s (pico real é set_skill→set_target→set_ready, ~3 eventos/turno). Descartar sem ack mantém a UX limpa pro real e força o abusador a reescrever lógica pra detectar throttle. Desconectar daria sinal claro ("você foi banido") que ajuda automação adversária
+- **`maxHttpBufferSize: 4096`** (não 1024): folga pra eventuais payloads de debug/futuras features de matchmaking. 4 KB ainda é 250× menor que o default e custa nada
+- **`uncaughtException` apenas loga** (não chama `shutdown`): em produção (Railway) preferimos perder uma sala caso de bug a derrubar todas. Se o erro for sistêmico, o monitoring externo do Railway pega via /health falhando. Decisão alinhada com Node best practices pós-Node-16 que ainda permite `--unhandled-rejections=warn`
+- **Não implementei reconnect formal (PROTO_SOCKET §10)**: escopo dele é maior — exige token de sessão, mapeamento socketId↔playerId persistente, retomada de fase/timer. Vale uma sub-sessão própria em MATCH-001 ou pós-Alpha
+- **Não implementei AFK timeout**: também escopo PROTO_SOCKET §10. O `disconnectedAt` + cleanup de 5 min já protege contra salas órfãs
+
+### Validação
+- `node --check` em server.js, rateLimit.js, validators.js
+- Smoke test do rate limiter: burst de 100 → 30 permitidas, 70 descartadas, depois `release()` reabastece o bucket (esperado e observado)
+- Smoke test dos validadores: `isPlainPayload` aceita `{}`/`null`/`undefined` e rejeita arrays/strings/números/booleans; `isShortString` aceita strings 1-64 chars, rejeita vazia, longa demais, ou tipos não-string
+- **Validação dinâmica fica com Gabriel**: jogar 1 partida normal no Railway/itch.io após o deploy. Comportamento esperado é idêntico (cliente honesto não percebe nada). Se houver regressão, suspeita primeiro do wrapper `guarded` — talvez algum payload que eu assumi como objeto venha como undefined em algum caminho do client real
+
+### Macro SEC-001 — checkpoint
+**Macro 100% completa (11 subs ✅, 1 ⏸ pulada por decisão).** SEC-001.2 a SEC-001.12 fechadas: backend autoritativo no Railway, cliente sem Firebase no itch.io, server hardenizado. Próxima Macro: **MATCH-001** (matchmaking — Private Room no server + Random Match queue + UI cliente)
+
+### Dependências externas (Gabriel cuida)
+- **Push do commit pro Railway** — server.js e dois novos arquivos (`rateLimit.js`, edição em `validators.js`) entram no redeploy. Confirmar `[server] listening on :PORT` nos logs após push. Cliente NÃO mudou nesta sub, então o ZIP do itch.io não precisa ser atualizado
+
+### Notas para próxima sessão
+- Próxima na ordem: **MATCH-001.1** — Private Room no server (código ABCD). Boa parte já existe (SEC-001.3 implementou `createPrivateRoom`/`joinPrivateRoom` com geração de código). MATCH-001.1 é provavelmente: revisar contrato vs PROTO_SOCKET, lidar com edge cases de entrada de URL com código (cliente lê `?sala=ABCD`), formalizar o fluxo de "join via link"
+- **Pendência herdada**: a UX de `ROOM_FULL` ainda é `alert()` no cliente (mencionado em notas da SEC-001.8). Vale tratar quando MATCH-001.5 chegar (UI de Private Room)
+- **Sugestão de schedule (mantida)**: quando MATCH-001.1 chegar, lembrar de remover o atalho `/jogo` de DEV em server.js — em produção cliente e server vivem em hosts separados
+
+---
+
+## 2026-04-28 Sessão MATCH-001.1 — Private Room formal
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- [server/rooms.js](../server/rooms.js) `joinPrivateRoom`:
+  - Normaliza `roomId` recebido pra uppercase via `String(roomId).toUpperCase()` antes do lookup. Cliente que cole `abcd` em vez de `ABCD` no link agora entra normalmente em vez de receber `ROOM_NOT_FOUND`. Códigos sempre são gerados em uppercase em [server/codes.js](../server/codes.js)
+  - Novo guard: `if (room.matchmaking !== "private") return { error: "ROOM_NOT_PRIVATE" }`. Hoje todas as salas são `"private"` (única forma de criar é `createPrivateRoom`), então o guard nunca dispara — mas MATCH-001.2 vai introduzir salas `matchmaking: "random"` criadas pelo pareamento de fila, e sem este guard alguém poderia tentar joinar nelas via código (vazaria estado de partida pareada randomicamente)
+- [docs/PROTO_SOCKET.md](PROTO_SOCKET.md):
+  - §6.1 reescrito: respostas de matchmaking documentadas como **ack callback** (contrato real desde SEC-001.3) em vez de eventos S→C dedicados (`room_created`/`joined`). Adicionada nota sobre normalização de roomId
+  - §7 enxugado: removidas linhas `room_created`, `joined`, `queued` (não são emits dedicados — viram ack); `state_update` ganhou nota de que também serve como entrega de estado inicial pós-create/join
+  - §8 ganhou 3 novos códigos de erro: `ROOM_NOT_PRIVATE` (deste sub), `INVALID_PAYLOAD` (do wrapper de SEC-001.12), `INVALID_MODE` (já existia em código mas não no doc)
+
+### Decisões técnicas
+- **Manter contrato ack em vez de migrar pra emits dedicados**: o cliente atual ([html/network.js:174-192](../html/network.js)) já consome ack e funciona; mudar agora seria churn sem ganho. Ack do socket.io é equivalente semântico a "S→C event direcionado ao requester" — a spec antiga foi escrita assumindo fluxo de emit puro, mas isso era idealismo do papel. Atualizar a spec é a forma certa de fechar a lacuna
+- **`String(roomId).toUpperCase()` em vez de `roomId.toUpperCase()`**: o wrapper SEC-001.12 já garante que `payload` é objeto plano, mas `payload.roomId` em si pode ser undefined/número/array (rate-limited mas não tipado). `String(...)` defensivamente evita crash; lookup falha em `Map.get` retornando undefined → `ROOM_NOT_FOUND`, que é a mensagem certa
+- **`ROOM_NOT_PRIVATE` em vez de reusar `ROOM_NOT_FOUND`**: erros distintos ajudam debug e permitem UX diferente no cliente (ex: explicar que código é só pra Private Room) — custo é uma string a mais
+
+### Validação
+- `node --check` em rooms.js e server.js
+- Smoke test programático: cria sala, faz join com código em minúscula → ok; tenta `XXXX` (inexistente) → `ROOM_NOT_FOUND`; muta `room.matchmaking="random"` e tenta join → `ROOM_NOT_PRIVATE`. Todos os 3 cenários comportam-se como esperado
+- **Validação dinâmica fica com Gabriel**: jogar 1 partida normal no Railway/itch.io após o deploy. Mudança é cirúrgica — partida típica não passa pelo guard novo. O único caso visível pro jogador é se ele colar a URL com código em minúsculas: antes ele via `alert("Erro ao entrar na sala: ROOM_NOT_FOUND")`, agora deve entrar normalmente
+
+### Dependências externas (Gabriel cuida)
+- **Push do commit pro Railway** — só rooms.js mudou no caminho de runtime do server (PROTO_SOCKET.md é doc, não roda). Confirmar `[server] listening on :PORT` após redeploy. Cliente NÃO mudou — ZIP do itch.io fica como está
+
+### Notas para próxima sessão
+- Próxima na ordem: **MATCH-001.2** — Random Match queue. Trabalho previsto: adicionar `Map<mode, PlayerInfo[]>` (ou estrutura equivalente) para fila por modo; handler `queue_join { mode }` valida não-em-fila/sala e enfileira; quando fila atinge `MAX_PLAYERS[mode]`, criar `RoomState` com `matchmaking: "random"` e mover players pra ela; emit `match_found { roomId, mySlot, state }` pros pareados. `queue_leave` e cleanup de filas órfãs (jogador desconectou na fila) também entram. Pré-requisito: o guard que acabei de adicionar em MATCH-001.1
+- **Atenção MATCH-001.3** (UI cliente): cliente atual ainda hardcodeia `mode: "1v1"` em [html/network.js:184](../html/network.js#L184) e cria sala automaticamente ao abrir sem URL. UI de tela inicial vai precisar de uma camada nova antes do `initMultiplayer` rodar — provavelmente um overlay com botões "Random / Private" × "1v1 / 4v4" que despacha a chamada apropriada
+
+---
+
+## 2026-04-29 Sessão MATCH-001.2 — Random Match queue
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- [server/rooms.js](../server/rooms.js):
+  - Estado novo: `queues = Map<mode, socketId[]>` (FIFO por modo, PROTO §11) e `socketToQueue = Map<socketId, mode>` (lookup reverso pra detectar `ALREADY_IN_QUEUE_OR_ROOM` cross-mode e fazer cleanup no disconnect)
+  - `queueJoin({mode, socketId})`: valida mode, rejeita se socket já está em sala/fila, enfileira, e pareia atomicamente quando `queue.length >= MAX_PLAYERS[mode]`. Retorna `{queued:true}` ou `{matched:[ids], room}`
+  - `queueLeave({socketId})`: idempotente — sempre retorna `{ok:true}` mesmo se o socket nunca entrou em fila. Cliente que clica "cancelar" duas vezes não vê erro
+  - `createRandomRoom(mode, socketIds)` interno: monta `RoomState` com `matchmaking:"random"`, `roomId` via `crypto.randomUUID()`, slots 0..N-1 atribuídos pela ordem de chegada na fila. Chama `maybeStartPlanning` (todos slots preenchidos e conectados → vira `phase:"planning"` direto)
+  - `markDisconnected` agora também chama `removeFromQueue` antes de tocar em `socketToRoom` — jogador que cai durante busca não fica fantasma na fila bloqueando próximos pareamentos
+- [server/server.js](../server/server.js):
+  - Imports `queueJoin`/`queueLeave` adicionados
+  - Handler `queue_join` (sob `guarded`): se pareou, emite `match_found { roomId, mySlot, state: StateForMe }` para cada matched socket via `io.sockets.sockets.get(sid).emit(...)`. Cada player recebe estado já cullado pelo seu slot (segue §5 do PROTO). Edge case: se um socket caiu entre o splice e o emit, pula com graça (`markDisconnected` faz cleanup eventual)
+  - Handler `queue_leave` (sob `guarded`): chama `queueLeave` e responde `{ok:true}`
+
+### Decisões técnicas
+- **Map<mode, []> em vez de 2 arrays separados**: facilita extensão futura (variantes de modo, ranqueado, etc.) e iterar/cleanup é trivial. Custo é zero
+- **Slot atribuído pela ordem de chegada na fila** (em vez de random shuffle): determinístico, sem implicação de balanceamento (jogo é simétrico — todos os spawns têm mesma distância pro goal). Quem entrou primeiro pega slot 0; trivial de explicar pro jogador se aparecer em alguma feature de "mostrar quem joga em qual canto"
+- **`queue_leave` idempotente em vez de retornar `NOT_IN_QUEUE`**: UX win — botão "cancelar match" não precisa lógica defensiva. Custa um código de erro a menos no PROTO. PROTO §6.1 dizia "validação: jogador está na fila" mas isso era idealismo de spec — em prática cancelamento é melhor idempotente
+- **`crypto.randomUUID()` para roomId random**: PROTO §4 já especificava UUID. Cliente não compartilha esse ID com ninguém (não existe link compartilhável pra Random Match), então não precisa ser legível como o ABCD da Private Room
+- **Pareamento atômico dentro do `queueJoin`** (em vez de timer separado): Node single-thread garante que cada `queueJoin` é atomic; checar fila e parear na mesma chamada elimina janela de inconsistência. PROTO §11 diz "fila simples FIFO" — não há razão pra introduzir tick assíncrono
+- **`maybeStartPlanning` reutilizado** em vez de criar `setPhasePlanning` próprio: zero diferença semântica entre Private Room e Random — ambas viram planning quando todos os slots estão preenchidos e conectados. Reuso mantém `phase` consistente
+
+### Validação
+- `node --check` em rooms.js e server.js
+- Smoke test programático cobriu 6 cenários:
+  1. **1v1 pareamento**: A entra → queued; B entra → matched=[A,B], sala criada com phase=planning, slots 0/1 com spawns [0,0]/[3,3]. ✓
+  2. **4v4 pareamento com sobra**: C/D/E queued, F dispara matched=[C,D,E,F], G fica esperando próximo grupo. ✓
+  3. **`queueLeave` idempotente**: X entra, leave (ok), leave de novo (ok sem erro). ✓
+  4. **Lock cross-mode**: Y entra em 1v1, tenta entrar em 4v4 → `ALREADY_IN_QUEUE_OR_ROOM`. ✓
+  5. **Cleanup no disconnect**: Z entra na fila, `markDisconnected(Z)`, Z entra de novo → queued OK (não fantasma). ✓
+  6. **`INVALID_MODE`**: `5v5` → erro. ✓
+- **Validação dinâmica fica com Gabriel**: precisa de cliente que chame `queue_join`/`queue_leave` pra testar end-to-end. Cliente atual ainda usa `create_private_room` direto; UI de Random Match vai chegar em MATCH-001.3 (tela inicial). Por enquanto dá pra testar com o `test-client.html` se quiser exercitar — mas não tem urgência, pode esperar MATCH-001.3
+
+### Dependências externas (Gabriel cuida)
+- **Push do commit pro Railway** — `rooms.js` e `server.js` mudaram. Confirmar `[server] listening on :PORT` após redeploy. Cliente NÃO mudou — ZIP do itch.io fica como está; nada visível no jogo até MATCH-001.3 expor a tela inicial
+
+### Notas para próxima sessão
+- Próxima na ordem: **MATCH-001.3** — Cliente: tela inicial. Trabalho previsto: novo overlay/screen antes de `initMultiplayer` ([html/network.js:174-192](../html/network.js)) onde jogador escolhe **matchmaking** (Random/Private) × **modo** (1v1/4v4). Despacha `queue_join`, `create_private_room`, ou `join_private_room` conforme escolha + entrada no campo "código". Cliente atual roteia 100% por URL (`?sala=ABCD` ou nada) — vai virar fallback de "join via link compartilhado" enquanto a tela inicial fica como caminho default
+- **Atenção pra MATCH-001.3**: o handler `queue_join` no server emite `match_found` (não `state_update` direto). Cliente precisa registrar `socket.on("match_found")` que vai chamar a mesma transição que hoje acontece após `room_created`/`joined` — entrar na sala e renderizar. Boa parte é compartilhar lógica
+- **Atenção pra MATCH-001.4** (UI aguardando match): vai precisar de timeout/cancelar elegante. `queue_leave` já existe e é idempotente; cliente só precisa chamar quando jogador clica "cancelar" ou navega fora
+
+---
+
+## 2026-04-29 Sessão MATCH-001.3 — Cliente: tela inicial
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- [html/startScreen.js](../html/startScreen.js) **novo módulo**:
+  - `showStartScreen()` retorna Promise<{action, mode, roomId?}> que resolve quando o jogador clica em um dos 3 botões. Cleanup de handlers no `finish()` (sem vazar referência se a tela for reaberta no futuro)
+  - `setLobbyMode(mode)`: alterna o texto e visibilidade do `#lobby-screen` entre "Aguardando segundo agente" + link de convite (private) e "Procurando oponente" sem link (random)
+  - Constante `MODE_4V4_LOCKED = true` controla o toggle. Trocar pra `false` em MODE-001 destrava 4v4 sem outras mudanças no startScreen
+- [html/index.html](../html/index.html):
+  - Novo `<div id="start-screen">` com toggle de modo (1v1/4v4) e 3 ações (Procurar oponente / Criar sala privada / Campo + Entrar)
+  - `<div id="lobby-screen">` ganhou `style="display:none"` (start-screen é visível por default agora). Subtitle ganhou id `lobby-subtitle` e botão copiar ganhou id `lobby-copy-btn` pra o `setLobbyMode` poder achar
+- [html/style.css](../html/style.css): bloco novo "── START SCREEN" com tokens reaproveitados (`--surf2`, `--bdr2`, `--p1`, `--gold`, `--p2`, `--dim`). Mode toggle com estado `.active` e `.locked`; ações primária/secundária; input de código mono-spaced em uppercase com letter-spacing 4
+- [html/network.js](../html/network.js):
+  - Import de `showStartScreen`/`setLobbyMode`
+  - Handler `socket.on("match_found")` novo — seta `window.roomId`/`window.myId` a partir do payload do server e atualiza state via `adaptStateForMe`. Sem isso o cliente nunca renderizaria o jogo após um pareamento Random
+  - Bloco de roteamento expandido: URL com `?sala` continua sendo atalho direto pro `join_private_room`; sem URL, chama `showStartScreen()` e despacha `queue_join`/`create_private_room`/`join_private_room` conforme escolha. `setLobbyMode("random"|"private")` no fim, antes de `lobby-screen.display = "flex"`
+
+### Decisões de produto registradas
+- **4v4 fica visível com badge "EM BREVE"** em vez de oculto: antecipa a feature pro jogador antes da Macro MODE-001. Custo: 1 string e 1 classe CSS (`.locked`). Ativação é uma flag (`MODE_4V4_LOCKED = false`)
+- **3 caminhos numa tela só** em vez de fluxo multi-tela: Random / Create / Join cabem em <360px na vertical, mobile-first. MATCH-001.4 (UI aguardando) e MATCH-001.5 (UI Private Room com código grande) podem virar overlays separados sem mexer nesta tela
+- **URL `?sala=XXXX` continua sendo atalho** que pula a tela: preserva fluxo de link compartilhado que já funciona. Quem cria sala via "Criar sala privada" também recebe URL atualizada via `replaceState` — pode compartilhar igual antes
+- **Lobby reaproveitado pra "Procurando..."** em vez de tela própria: economia de markup. Quando MATCH-001.4 trouxer animação de busca + botão cancelar, vira tela própria
+
+### Decisões técnicas
+- **`showStartScreen()` Promise-based** em vez de callback ou estado global: encaixa direto em `await` dentro de `initMultiplayer` sem complicar o fluxo. Cleanup de listeners em `finish()` evita acúmulo se a tela voltar a aparecer no futuro
+- **`Map<id, handler>` não usado**: handlers atribuídos diretamente via `.onclick = ...` (não `addEventListener`). Justificativa: pivot do jogo já usa esse padrão em outros lugares; consistência > pureza. Se MATCH-001.4 trouxer múltiplos listeners por elemento, migra pra `addEventListener`/`removeEventListener`
+- **`window.roomId.toUpperCase()` no caminho `joinPrivate`**: redundante com a normalização server-side de MATCH-001.1, mas mantém URL espelhando o que o server reconheceu — usuário recarregando a página vê código consistente
+- **`alert(...)` mantido pros erros de matchmaking**: feio, mas suficiente pra Alpha. UI proper de erro vai junto com MATCH-001.5 (UI Private Room)
+
+### Validação
+- `node --check` em network.js, startScreen.js, ui.js, gameState.js, combat.js, validators.js: tudo passou
+- IDs cruzados conferidos: 11 IDs criados em index.html (`start-screen`, `ss-mode-1v1`, `ss-mode-4v4`, `ss-btn-random`, `ss-btn-create`, `ss-btn-join`, `ss-input-code`, `ss-error`, `lobby-subtitle`, `invite-link`, `lobby-copy-btn`) — todos consumidos pelo startScreen.js
+- Fluxo de transição cobre 4 caminhos:
+  1. URL com `?sala=XXXX`: tela inicial pulada, vai direto pro `join_private_room` (compat)
+  2. Random → `queue_join` → lobby "Procurando..." → `match_found` → game
+  3. Create Private → `create_private_room` → lobby "Aguardando..." com link → opponent join → game
+  4. Join Private → input código → `join_private_room` → game (se sala já tem 1 player, vira planning direto)
+- **Validação dinâmica fica com Gabriel**: precisa testar no PC com 2 abas (ou 2 dispositivos). Caminho completo: abrir página em A → escolher "Criar sala privada" → copiar link → abrir em B → ver tela inicial → opção 1: usar link (atalho), opção 2: digitar código no input. Também testar caminho Random com A "Procurar oponente" + B "Procurar oponente" → ambos pareados. Fluxo da URL antiga (link Alpha) não muda
+
+### Dependências externas (Gabriel cuida)
+- **ZIP do `html/`** atualizado no itch.io: agora tem 1 arquivo a mais (`startScreen.js`) + edições em `index.html`/`style.css`/`network.js`. Conteúdo do ZIP: `index.html` na raiz + `style.css` + `gameState.js` + `network.js` + `combat.js` + `ui.js` + `validators.js` + `startScreen.js`
+- **Server NÃO mudou** nesta sub — Railway redeploy não é necessário (mas não atrapalha)
+
+### Notas para próxima sessão
+- Próxima na ordem: **MATCH-001.4** — UI de aguardando match (Random). Trabalho previsto: trocar o lobby-screen reaproveitado por uma tela própria com animação de "procurando" (pulsar / dots) + botão CANCELAR que dispara `queue_leave` e volta pro start-screen. Quando `match_found` chega, fade-out e abre game
+- **Atenção pra MATCH-001.5** (UI Private Room): hoje o link compartilhado é mostrado no `#lobby-screen` reaproveitado. MATCH-001.5 vai dar um upgrade — código ABCD em fonte grande (já que tem só 4 chars), botão "copiar código" próprio, lista de jogadores na sala com indicador de quem já chegou
+- **Atenção pra MODE-001**: destravar 4v4 na tela inicial é trivial — `MODE_4V4_LOCKED = false` em [html/startScreen.js:6](../html/startScreen.js#L6). Mas só faz sentido depois de MODE-001.4 (renderizar 4 jogadores) e MODE-001.5 (Royal Rumble com 3+ dados)
+
+---
+
+## 2026-04-29 Sessão MATCH-001.4 — UI de aguardando match
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- [html/index.html](../html/index.html): novo `<div id="searching-screen">` com título 4×4, label "Procurando oponente", 3 dots pulsantes, botão CANCELAR
+- [html/style.css](../html/style.css): bloco "── SEARCHING SCREEN" — fixed overlay z-index 6500 (mesmo do start-screen), `.searching-dots span` com animação `searching-pulse` 1.4s ease-in-out infinita e delays escalonados (0/0.2/0.4s) gera o efeito de scanner. Botão cancelar usa `--p2` (vermelho) — diferencia visualmente das ações primárias
+- [html/startScreen.js](../html/startScreen.js):
+  - `setLobbyMode` removida (não é mais usada — lobby-screen volta a ser exclusivo de Private Room)
+  - `showSearchingScreen()` retorna Promise<{result:"matched"|"cancelled"}>. Cleanup zera o handler do botão e o resolver de match. Idempotente: chamada repetida reseta o estado interno
+  - `notifyMatchFound()`: chamada pelo handler `socket.on("match_found")` em network.js; resolve a Promise pendente se houver. No-op se ninguém está esperando (chamadas espúrias são ignoradas)
+- [html/network.js](../html/network.js):
+  - Bloco de roteamento sem URL virou um `while (true)` com `break` em cada caminho terminal — permite que cancelar o Random Match volte ao start-screen sem reload da página. Em todos os caminhos, erro do server faz `continue` (loop) em vez de `return` (mata o cliente)
+  - Handler `match_found` chama `notifyMatchFound()` antes de propagar pra `_onStateChange`. Se a tela searching estiver aberta, ela fecha antes do `syncUI` rodar e mostrar o jogo
+  - Flag `isRandomMatched`: pareamento Random pula o `lobby-screen` totalmente — ambos os jogadores entram direto no game-container porque `match_found` já trouxe o estado completo (phase=planning, ambos connected). Sem isso o lobby piscaria por uma fração de segundo
+
+### Decisões de produto
+- **Animação de 3 dots em vez de spinner**: minimalista, combina com o resto da estética cyberpunk; spinner padrão Material/Bootstrap quebraria a linguagem visual. Reuso de `--p1` mantém a paleta
+- **Botão CANCELAR em `--p2` (vermelho)**: sinal visual de "ação destrutiva" — alinhado com a regra de cor já estabelecida (player 1 azul = aliado, player 2 vermelho = oponente/perigo)
+- **Lobby-screen volta a ser só Private**: estava reaproveitado em MATCH-001.3 com `setLobbyMode("random"|"private")`, mas tela própria pra Random é mais limpa e abre espaço pra animação. `setLobbyMode` removido sem deixar shim
+
+### Decisões técnicas
+- **Loop `while(true)` em vez de recursão** em `initMultiplayer`: estouro de stack improvável (jogador teria que cancelar centenas de vezes) mas o while é mais legível e debugável. Variável `isRandomMatched` no escopo do loop sai pelo `break`
+- **`notifyMatchFound()` é idempotente e não faz cleanup ela mesma**: o cleanup acontece dentro do resolver registrado pelo `showSearchingScreen` (ou seja, ela só "puxa o gatilho"). Mantém responsabilidade clara: `showSearchingScreen` é dona da tela, `notifyMatchFound` só sinaliza
+- **Edge case race "cancelei mas server pareou"**: jogador clica CANCELAR no exato instante em que o server emite `match_found`. Janela é de milissegundos. Comportamento atual: o `match_found` chega depois do `cleanup` ter limpado o resolver; `notifyMatchFound` vira no-op; `_onStateChange` ainda dispara via handler match_found e atualiza `window.S` + `window.roomId`. O jogador acabaria entrando no jogo apesar de ter clicado cancelar. **Não tratado nesta sub** — janela é muito pequena, e tratar exigiria token de session ou confirmação no server. Listado pra hardening futuro se virar problema reportado
+
+### Validação
+- `node --check` em network.js e startScreen.js
+- IDs cruzados conferidos: `searching-screen`, `searching-btn-cancel` ambos presentes no markup e referenciados no JS
+- Fluxos cobertos:
+  1. Random Match → searching-screen → match_found → game-container (esconde searching via `cleanup` antes do syncUI)
+  2. Random Match → searching-screen → CANCELAR → queue_leave → start-screen (loop)
+  3. CANCELAR + reentrar Random: nova chamada `showSearchingScreen` reseta resolver pendente; sem vazamento de listener
+- **Validação dinâmica fica com Gabriel**: testar no PC com 2 abas em modo Random:
+  1. A clica "Procurar oponente" → vê dots pulsando
+  2. A clica CANCELAR → volta pro start-screen (sem refresh)
+  3. A clica "Procurar oponente" de novo → dots pulsam de novo (reentrada OK)
+  4. B clica "Procurar oponente" → ambos pareiam, jogo começa
+
+### Dependências externas (Gabriel cuida)
+- **Re-zipar `html/` e atualizar upload no itch.io** — `index.html`, `style.css`, `network.js`, `startScreen.js` mudaram. Sem arquivos novos nesta sub
+- **Server NÃO mudou** — Railway redeploy não é necessário
+
+### Notas para próxima sessão
+- Próxima na ordem: **MATCH-001.5** — UI Private Room. Trabalho previsto: tela própria pra "sala criada" (em vez de reaproveitar `lobby-screen`) com código ABCD em fonte grande, botão "copiar código" próprio (vs. URL), lista de jogadores conectados na sala (importante pra 4v4 onde 4 slots aparecem progressivamente). `lobby-screen` atual pode ser absorvido ou virar fallback
+- **Race extremo a observar em produção**: se o relato vier de "cliquei cancelar mas entrei no jogo", é o edge case documentado em decisões técnicas. Solução prevista: server emitir `queue_left { ok: true }` somente se conseguiu remover ANTES do pareamento; se já pareou, retornar erro `ALREADY_MATCHED` e cliente forçar leave_room. Um pouco de trabalho, vale só se aparecer relato
+
+---
+
+## 2026-04-29 Sessão MATCH-001.5 — UI de Private Room
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- [html/index.html](../html/index.html): `<div id="lobby-screen">` removido; novo `<div id="private-room-screen">` com título 4×4, label "SALA PRIVADA", `#private-code` em fonte mono grande clicável, botões "COPIAR CÓDIGO"/"COPIAR LINK", e bloco `.private-players` com `#private-players-count` + `#private-players-list`
+- [html/style.css](../html/style.css): bloco `─── LOBBY` reorganizado em `─── SHARED TITLES & DIVIDER` (mantém `.lobby-title` e `.gold-line` reusados pelo start/searching) e `─── PRIVATE ROOM`. Removidos: `#lobby-screen`, `.lobby-sub` (não era usado em lugar nenhum), `.link-box`/`.link-box:hover`. Adicionados estilos pro código (clamp 48-82px, letter-spacing 14, padding-left maior pra compensar tracking do último char), botões compactos, lista com bullet `.dot` que muda cor + glow quando `.connected`
+- [html/ui.js](../html/ui.js):
+  - `syncUI` reescrita: `allConnected = S.players.every(p => p.connected)` (genérica pra N players). Branch quando algum slot vazio: se `S.matchmaking === "private"` mostra `#private-room-screen` + chama `renderPrivateRoom()`; se random, mantém o tabuleiro visível pra o jogador (sem tela específica até hardening de reconnect)
+  - `renderPrivateRoom()` nova: seta `#private-code` com `window.roomId`, atualiza `#private-players-count` com `${connected}/${total}`, renderiza lista de slots com `<dot> + label`. Label: "Você — Agente I" se for o próprio jogador, "Agente II/III/IV" pros conectados, "Aguardando…" pros vazios. Constante `ROMAN = ['I','II','III','IV']` cobre 4v4 sem mudanças
+  - `showAftermath` agora esconde `#private-room-screen` em vez de `#lobby-screen`
+  - `window.copyCode` adicionado: copia `window.roomId` (o código ABCD) com alert de confirmação
+- [html/network.js](../html/network.js):
+  - `adaptStateForMe` e `adaptFullState` agora propagam o campo `matchmaking` — `syncUI` precisa pra distinguir Private vs Random na tela de "aguardando"
+  - Bloco final que setava `#lobby-screen.display = "flex"` e `#invite-link.innerText = window.location.href` removido — `syncUI` agora cuida disso sozinho via `renderPrivateRoom`. Variável morta `isRandomMatched` também removida
+
+### Decisões de produto
+- **Código clicável + 2 botões redundantes** (clique no código copia + botão "COPIAR CÓDIGO" + botão "COPIAR LINK"): clique direto cobre desktop power user; botão "COPIAR CÓDIGO" cobre mobile (clicar texto pequeno é frágil); botão "COPIAR LINK" cobre quem prefere mandar URL completa (one-click join). 3 caminhos = mais cliques completados
+- **Indicador `.dot` verde com glow** quando conectado: visual clean, alinhado com a estética cyberpunk; cor `--btn-active` (verde) já existe no projeto. Glow via `box-shadow` com `color-mix` 50% transparência — sutil
+- **Tela genérica de N players** desde já: lista renderiza igual pra 1v1 (2 slots) ou 4v4 (4 slots). Quando MODE-001 destravar 4v4 não precisa mexer em ui.js — só `MODE_4V4_LOCKED = false` em startScreen.js
+- **Removido `.lobby-sub` morto**: não era usado em parte alguma. Cleanup pequeno mas vale (regra inviolável #5 — sem código morto)
+
+### Decisões técnicas
+- **Decisão de qual tela mostrar via `S.matchmaking`** em vez de flag local: a fonte de verdade é o server. Adapter passa o campo agora; sem isso o cliente teria que inferir do formato do roomId (4 chars uppercase = private; UUID = random) — frágil. Custo: 1 campo a mais no payload culado, ~12 bytes
+- **`renderPrivateRoom()` chamada a cada `state_update`** em vez de só no primeiro: idempotente (DOM mutation só altera o que mudou). Quando 4v4 chegar (ou quando jogador desconecta/reconecta), a lista atualiza automaticamente via syncUI sem orquestração extra
+- **`syncUI` no caso "random com slot vazio"** mantém o estado visual anterior (tabuleiro) sem mostrar tela de aviso: se um oponente cair durante random match, o jogador hoje vê o tabuleiro estático. Adicionar overlay "Oponente desconectado" exigiria sub-sessão própria (UX de reconexão é tópico amplo). Comportamento atual é o melhor "fallback do nada" — pelo menos não esconde tudo
+- **Sem botão "VOLTAR" na private-room-screen**: jogador que criou uma sala e quer cancelar pode simplesmente fechar a aba ou recarregar (sala stale → cleanup de 5min do server). Add botão volta exigiria "leave_room" + `showStartScreen` igual ao searching → vale numa sub futura se reportado
+
+### Validação
+- `node --check` em network.js, ui.js, startScreen.js
+- Grep cruzado: zero referências a `lobby-screen`, `lobby-sub`, `link-box`, `invite-link`, `lobby-subtitle`, `lobby-copy-btn` em qualquer arquivo. Limpeza completa
+- IDs cruzados conferidos no markup novo: `private-room-screen`, `private-code`, `private-players-count`, `private-players-list` — todos consumidos por ui.js e onclick handlers
+- **Validação dinâmica fica com Gabriel**: testar no PC com 2 abas:
+  1. A: tela inicial → "Criar sala privada" → vê código grande (4 chars), 2 botões copiar, lista "Você - Agente I" + "Aguardando…"
+  2. A: clicar no código (copia) → alert; clicar "COPIAR CÓDIGO" → mesma coisa; clicar "COPIAR LINK" → copia URL com `?sala=...`
+  3. B: tela inicial → digita código no input ENTRAR → entra na sala; ambos veem game-container (private-room-screen some)
+  4. Caminho alternativo: A copia link, B abre URL → entra automaticamente (atalho de URL pula a tela inicial)
+  5. Random Match continua funcionando igual (não toca em private-room-screen)
+
+### Macro MATCH-001 — checkpoint
+**Macro 100% completa (5/5 sub-sessões ✅).** MATCH-001.1 (Private Room formal) + MATCH-001.2 (Random queue) + MATCH-001.3 (tela inicial) + MATCH-001.4 (searching screen com cancelar) + MATCH-001.5 (UI Private Room). Cliente agora tem fluxo completo de matchmaking: 3 caminhos (Random / Create Private / Join Private com código), 4 telas (start, searching, private-room, game), retrocompatível com link `?sala=ABCD`. Próxima Macro: **MODE-001** (modo 4v4 — Free-For-All)
+
+### Dependências externas (Gabriel cuida)
+- **Re-zipar `html/` e atualizar upload no itch.io**: `index.html`, `style.css`, `ui.js`, `network.js` mudaram (sem arquivo novo nesta sub). Conteúdo do ZIP: `index.html` + `style.css` + `gameState.js` + `network.js` + `combat.js` + `ui.js` + `validators.js` + `startScreen.js`
+- **Server NÃO mudou** — Railway redeploy não é necessário
+
+### Notas para próxima sessão
+- Próxima na ordem: **MODE-001.1** — Server: schema com N players + spawns 4 cantos. Maior parte do server já suporta N players desde SEC-001.5/.6 (combate Royal Rumble e endgame foram feitos genéricos desde o início). MODE-001.1 deve ser pequena: confirmar que `MAX_PLAYERS["4v4"]=4`, `SPAWNS_BY_SLOT["4v4"]` e `GOALS_BY_SLOT["4v4"]` em [server/constants.js](../server/constants.js) estão corretos (já estão), validar que `joinPrivateRoom` aceita 3°/4° players sem regressão (já aceita pelo `nextFreeSlot`), e talvez documentar/escrever 1 teste de smoke
+- **Atenção pra MODE-001.4** (renderizar 4 jogadores): `ui.js` hoje tem cores `var(--p1)` e `var(--p2)` hardcoded em vários pontos (renderHeader, renderBoard, showCombatUI). Vai precisar adicionar `--p3` e `--p4` no `:root` do CSS e generalizar. Lista da private-room-screen já está pronta pra 4 players (genérica), mas o tabuleiro não
+- **Destravar 4v4 só depois de MODE-001.4-6** estarem prontos: `MODE_4V4_LOCKED = false` em [html/startScreen.js:6](../html/startScreen.js#L6) é o último passo. Se Gabriel destravar antes, criar sala 4v4 vai gerar 4 players no server mas o cliente vai quebrar ao renderizar — `S.players[2]` não existe no DOM
