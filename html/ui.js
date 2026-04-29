@@ -6,14 +6,10 @@
 //
 // syncUI é exportada para ser passada como callback de initMultiplayer (em network.js).
 
-import { DICE, COMBAT_REVEAL_MS, SPAWN_PER_SLOT, GRID_SIZE, arrEq } from './gameState.js';
-import { IS_SERVER_MODE, actReady, actRollDie, actRestartGame } from './network.js';
-import { hostProcessTurn, hostResolveCombat, getTotalMod } from './combat.js';
+import { DICE, SPAWN_PER_SLOT, GRID_SIZE, arrEq } from './gameState.js';
+import { actReady, actRollDie, actRestartGame } from './network.js';
+import { getTotalMod } from './combat.js';
 import { calcFogMask, validSkillTargets } from './validators.js';
-
-// Timer do delay de revelação do combate. Mantido em window para compat com
-// código que pode inspecionar/cancelar de fora durante depuração.
-window.combatTimer = null;
 
 /* ── layout helpers ─────────────────────────────────── */
 const getLayout = () => {
@@ -45,19 +41,9 @@ export function syncUI(){
 
     if(S.phase==="combat"){
         showCombatUI();
-        // Em modo server, resolução do combate roda no server — cliente só renderiza.
-        if(!IS_SERVER_MODE && window.myId===0&&S.players[0].roll>0&&S.players[1].roll>0){
-            if(!window.combatTimer){
-                window.combatTimer=setTimeout(()=>{window.combatTimer=null;hostResolveCombat();},COMBAT_REVEAL_MS);
-            }
-        } else {
-            if(window.combatTimer){clearTimeout(window.combatTimer);window.combatTimer=null;}
-        }
     } else {
         document.getElementById('combat-overlay').style.display='none';
         renderBoard();
-        // Em modo server, processamento de turno é autoritativo no server.
-        if(!IS_SERVER_MODE && window.myId===0&&S.players[0].ready&&S.players[1].ready){ hostProcessTurn(); }
     }
 }
 
@@ -194,9 +180,7 @@ window.ready=()=>{
 window.rollDie=async (id)=>{
     if(id!==window.myId||S.players[id].roll>0)return;
 
-    // Server gera o dado em modo server (anti-trapaça); Firebase usa local.
-    const localRoll = IS_SERVER_MODE ? null : Math.floor(Math.random()*6)+1;
-    const roll = await actRollDie(localRoll);
+    const roll = await actRollDie();
     if(roll === null) return;
 
     const die=document.getElementById(`die-${id}`);
@@ -342,16 +326,7 @@ function drawSVG(){
 
 /* ── restart ────────────────────────────────────────── */
 window.restartGame=()=>{
-    // Em modo server, server reseta autoritariamente; o resetState abaixo vai apenas como
-    // payload Firebase quando USE_SERVER=false (actRestartGame ignora arg em modo server).
-    const resetState={
-        players:[
-            {id:0,pos:[0,0],target:false,skill:"",combatSkill:"",inv:{BLOCK:2,TRAP:2,SPRINT:1},ready:false,roll:0,permMod:0,history:[[0,0]],trapped:false,jumpedBlock:false,connected:S.players[0].connected},
-            {id:1,pos:[3,3],target:false,skill:"",combatSkill:"",inv:{BLOCK:2,TRAP:2,SPRINT:1},ready:false,roll:0,permMod:0,history:[[3,3]],trapped:false,jumpedBlock:false,connected:S.players[1].connected}
-        ],
-        blocks:[],traps:[],spentRes:[],combatLocs:[],phase:"planning",winner:-1,isEndgame:false
-    };
-    actRestartGame(resetState);
+    actRestartGame();
 };
 
 window.copyLink=()=>{ navigator.clipboard.writeText(window.location.href); alert("Link copiado."); };

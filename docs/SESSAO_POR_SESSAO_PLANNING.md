@@ -45,7 +45,7 @@ Backlog organizado em **Macro Tarefas** (épicos) com **sub-sessões** numeradas
 | 26 | SEC-001.8 | ✅ | Cliente — flag `USE_SERVER` em network.js |
 | 27 | SEC-001.9 | ⏸ | Validação de paridade Firebase ↔ Server (pulada por decisão do Gerente em 2026-04-28; Firebase ainda vivo até SEC-001.11 como rede de segurança) |
 | 28 | SEC-001.10 | ✅ | Promoção: `USE_SERVER=true` permanente |
-| 29 | SEC-001.11 | ⏳ | Descontinuar Firebase |
+| 29 | SEC-001.11 | ✅ | Descontinuar Firebase |
 | 30 | SEC-001.12 | ⏳ | Hardening: rate limit, validação, graceful shutdown |
 | 31 | MATCH-001.1 | ⏳ | Matchmaking — Private Room no server (código ABCD) |
 | 32 | MATCH-001.2 | ⏳ | Matchmaking — Random Match queue no server |
@@ -102,7 +102,7 @@ Backlog organizado em **Macro Tarefas** (épicos) com **sub-sessões** numeradas
 | SEC-001.8 | ✅ | Adicionar flag `USE_SERVER` em `network.js`; em `true`, cliente conecta ao server (concluído 2026-04-28) |
 | SEC-001.9 | ⏸ | Validação de paridade Firebase ↔ Server (smoke test alternando flag) (pulada 2026-04-28 — roteiro pronto em PARIDADE_REPORT.md, revisitar se bug aparecer) |
 | SEC-001.10 | ✅ | Promoção: `USE_SERVER=true` permanente (concluído 2026-04-28 — server no Railway, cliente no itch.io) |
-| SEC-001.11 | ⏳ | Descontinuar Firebase (remover SDK, paths, listeners) |
+| SEC-001.11 | ✅ | Descontinuar Firebase — SDK, config, chave, initFirebaseMode, branches duais e `combat.js` host* removidos (concluído 2026-04-28) |
 | SEC-001.12 | ⏳ | Hardening: rate limit, validação input, graceful shutdown, uncaughtException |
 
 **Nota de design (importante):** SEC-001.5 (combate) e SEC-001.6 (vitória) são implementados desde o início suportando **N players** e **goal por slot**. Isso significa que MODE-001 (4v4) é majoritariamente cliente — o server já está pronto. Decisão: pagar um pouco mais de custo no SEC-001 para evitar refator no MODE-001.

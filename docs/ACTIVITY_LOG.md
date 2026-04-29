@@ -812,3 +812,36 @@ ui.js          (~250 linhas)  — syncUI, renderBoard, screens, handlers
 - Próxima na ordem: **SEC-001.11** — descontinuar Firebase (remover SDK, paths, listeners, chave). Quando esta sub rodar, o caminho `initFirebaseMode` em network.js sai inteiro, junto com `firebaseConfig`, imports do firebase, e os exports `db`/`ref`/`set`/`onValue`/`get`/`update`. Ataca o vazamento original da chave (alerta GitHub de 2026-04-26) na raiz: a chave deixa de existir no código vivo
 - **Pré-requisito de produto pra SEC-001.11**: confirmar que o Railway está estável após uns dias de uso. Se houver problema crítico, reverter `USE_SERVER` pra `false` é trivial (1 linha) — desde que Firebase continue vivo. SEC-001.11 fecha a porta de saída
 - **Atenção:** verificar fim a fim antes de SEC-001.11. Cenários: criar sala no itch.io, copiar URL, abrir em outro dispositivo/aba, jogar uma partida completa. Se algo não funcionar, vira correção dentro de SEC-001.10 (não nova sub)
+
+---
+
+## 2026-04-28 Sessão SEC-001.11 — Descontinuar Firebase
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- [html/network.js](../html/network.js) reescrito sem caminho Firebase. Removidos: imports de `firebase-app.js`/`firebase-database.js`, objeto `firebaseConfig` (com a `apiKey`), `initializeApp`, `getDatabase`, re-exports `db/ref/set/onValue/get/update`, flags `USE_SERVER`/`IS_SERVER_MODE`, função `initFirebaseMode`, branches Firebase em `actReady`/`actRollDie`/`actRestartGame`, `window.dbRef`. `initMultiplayer` ficou com o que era `initServerMode` (única implementação). Tamanho: 298 → 192 linhas
+- [html/combat.js](../html/combat.js) reduzido a `getTurnMod` + `getTotalMod` (helpers de display do overlay de combate). Removidos: `hostProcessTurn`, `hostMove`, `hostResolveCombat`, `hostCheckWin` (toda a lógica autoritativa que vivia aqui — portada para o server em SEC-001.4 a SEC-001.6 e agora era código morto). Tamanho: 132 → 17 linhas
+- [html/ui.js](../html/ui.js): imports atualizados (sem `IS_SERVER_MODE`/`hostProcessTurn`/`hostResolveCombat`/`COMBAT_REVEAL_MS`); `syncUI` perdeu o bloco que agendava `setTimeout(hostResolveCombat, COMBAT_REVEAL_MS)` e o `if(window.myId===0&&...)hostProcessTurn()`; `window.combatTimer` removida; `window.rollDie` chama `actRollDie()` sem argumento; `window.restartGame` deixa de montar `resetState` local (server reseta autoritariamente)
+- [html/gameState.js](../html/gameState.js): exports não mais usados removidos (`COMBAT_REVEAL_MS`, `INV_INITIAL`); comentário do `window.S` atualizado para refletir que ele é placeholder sobrescrito pelo primeiro `state_update`
+- [html/index.html](../html/index.html): comentário acima da CDN do socket.io reescrito (antes mencionava flag `USE_SERVER`, agora descreve o uso direto)
+
+### Decisões técnicas
+- **Sem flag de modo**: `USE_SERVER`/`IS_SERVER_MODE` removidos por completo. Manter como `const true` exportada seria vestígio sem função. Cliente assume server autoritativo a partir desta sub — refletindo a realidade pós SEC-001.10. Reverter pra Firebase agora exigiria `git revert` desta sub (ou voltar uma versão na linha do tempo); a "rede de segurança" de SEC-001.10 termina aqui, conforme planejado
+- **`combat.js` mantido como arquivo separado** (em vez de mover `getTotalMod` pra `ui.js` ou `gameState.js`): semanticamente é display de combate; manter o nome facilita encontrar quando o cliente do 4v4 (MODE-001.5) precisar do mesmo cálculo
+- **`gameState.js` ficou com `window.S` placeholder**: zerar players e blocks/traps logo no carregamento; primeiro `state_update` do server preenche tudo. Alternativa seria não inicializar e deixar `S` undefined até o primeiro emit — mas `syncUI` foi escrito assumindo `S.players[0].connected` legível. Manter o placeholder é mais defensivo
+- **Chave Firebase morre aqui**: o `apiKey` saiu do `network.js` (era a única ocorrência em código vivo). Histórico do Git ainda tem; `testes/index.html` (backup Alpha congelado) também ainda tem. Para fechar 100% precisaria reescrever histórico (não fizemos — risco>benefício, e a chave já foi restringida por domínio em 2026-04-27 + agora não existe mais no código que roda)
+
+### Validação
+- `node --check` passou em network.js, combat.js, ui.js, gameState.js, validators.js
+- Validação dinâmica fica com Gabriel: jogar 1 partida no Railway/itch.io após o deploy. Comportamento esperado é idêntico ao anterior (SEC-001.10 já era server-only); esta sub não muda fluxo, só remove código morto. Se algo regredir é porque algum `host*` ainda estava sendo invocado em algum caminho que SEC-001.8/.10 não capturaram
+
+### Macro SEC-001 — checkpoint
+**Implementado (SEC-001.2 a SEC-001.11):** boilerplate, lifecycle Private Room, planning, combat (Royal Rumble), endgame+restart, culling, cliente plugado, paridade (pulada), promoção pra produção, **descontinuação do Firebase**. Server hoje é o único caminho; cliente não tem mais SDK Firebase, chave, ou bifurcação. 10/12 sub-sessões da Macro concluídas (~83%). Resta apenas SEC-001.12 (hardening: rate limit, validação, graceful shutdown)
+
+### Dependências externas (Gabriel cuida)
+- **Push do commit pro Railway** — server.js e PROTO_SOCKET.md não mudaram nesta sub, então nem precisa redeploy do server (mas não atrapalha). O que importa é re-zipar `html/` (sem o Firebase) e atualizar o upload no itch.io para o cliente público parar de carregar o SDK Firebase de 1MB que não usa mais
+
+### Notas para próxima sessão
+- Próxima na ordem: **SEC-001.12** — hardening do server. Itens previstos: rate limit por socket (proteção contra spam de emits), validação dos payloads de entrada (hoje rooms.js confia no shape, exemplo: `set_target` com `target` não-array crasha o `arrEq`), graceful shutdown (SIGTERM do Railway → desconectar todos antes de matar processo), `process.on('uncaughtException')` para logging em vez de crash silencioso. Reconexão (PROTO_SOCKET §10) também pode entrar aqui dependendo do escopo. Última sub da Macro SEC-001 antes de seguir pra MATCH-001
+- **Sugestão de schedule:** quando MATCH-001.1 chegar (Private Room formal), valeria abrir um agente de cleanup pra remover o atalho de DEV `/jogo` em [server/server.js](../server/server.js) — útil hoje porque cliente e server compartilham origem em desenvolvimento, mas em produção o cliente vive em `itch.io`/`itch.zone` (CORS já cobre). Não é urgente
