@@ -1255,3 +1255,96 @@ Não há nada pra Gabriel testar nesta sub — server não mudou, cliente ainda 
   5. Empate (re-roll) em 4v4: server já trata via `pendingCombat.participants` reduzido — cliente só precisa re-renderizar com novo `participants`
 - **Atenção pra MODE-001.6** (Aftermath 4 trajetos): a maior parte já está pronta nesta sub. MODE-001.6 talvez vire só ajustes finos — opacidade das paths, indicação visual do vencedor entre 4, ícones do Aftermath header. Pode ser sub curtíssima ou absorvida na próxima
 - **Toggle 4v4 pode ser destravado depois de MODE-001.5**: tabuleiro + combat overlay cobrem o gameplay. Aftermath funciona "good enough" mesmo se MODE-001.6 ainda não chegou. Decisão do Gabriel quando achar momento
+
+---
+
+## 2026-04-29 Sessão MODE-001.5 — Cliente: combate Royal Rumble (overlay com 2-4 dados)
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- [html/network.js](../html/network.js) `adaptStateForMe`: passa `state.pendingCombat` direto pro `window.S.pendingCombat`. Antes o adapter ignorava esse campo — UI não tinha como saber quem está no combate atual. Em 4v4 isso é essencial: nem todos os 4 entram em todo combate (pode ser 2 colidindo enquanto os outros 2 movem)
+- [html/index.html](../html/index.html) `#combat-overlay`: enxugado de markup hardcoded com 2 dies (`die-0`, `die-1`) + `.combat-vs` "VS" pra um único container `<div class="combat-arena" id="combat-arena"></div>`. ui.js popula em runtime
+- [html/ui.js](../html/ui.js):
+  - `showCombatUI` reescrita: lê `S.pendingCombat.participants`, ordena, e itera. Para cada participante, decide se já rolou via `pc.myRoll` (eu) ou `pc.opponentRolls.find(o=>o.slot===slot).rolled` (oponente). PROTO §5.3 mantido — valor do dado do oponente continua oculto até `combat_resolved`
+  - `setupCombatArena(participants)`: novo helper. Reconstrói o DOM do arena só quando o conjunto de participantes muda (via `dataset.sig`). Em re-roll de Royal Rumble (top scorers), `pc.participants` reduz e o arena se atualiza sozinho
+  - `renderCombatDie(slot, isMe, hasRolled, myRollValue)`: novo helper. Três caminhos visuais — meu dado pousado com número e math; oponente que rolou (idle "·" + hint "rolou", valor escondido); ainda não rolou (idle + "toque para rolar" se for meu, "aguardando..." se for de outro)
+  - `rollDie` agora curto-circuita por `S.pendingCombat?.myRoll > 0` (em vez de `S.players[id].roll>0` que não funcionava com cull — `players[other].roll` sempre é 0 no cliente). Mantém id-check `id !== window.myId` por segurança
+  - Bloco morto removido: cálculo `t1` vs `t2` que escrevia "VENCEDOR: AGENTE I/II" só rodava se ambos `players[*].roll > 0` — impossível com cull. Não havia regressão de UX porque na prática nunca renderizava nada
+- [html/style.css](../html/style.css) `.combat-arena`: ganha `flex-wrap:wrap` + `justify-content:center` + `row-gap:28px` pra 3-4 dados quebrarem linha em telas estreitas. Mobile reduz `gap` pra 18px e `row-gap` pra 20px. Bloco `.combat-vs` removido (não há "VS" entre N participantes em Royal Rumble)
+
+### Decisões técnicas
+- **Spectators de combate parcial em 4v4 também veem o overlay**: server bota `room.phase = "combat"` pra sala inteira mesmo quando só 2 de 4 colidem. UI mostra só os participantes (sem botão de rolar pros que não estão), e o "aguardando..." nos seus próprios dies… espera, spectator não tem die próprio renderizado no novo arena (só `participants` aparecem). O spectator vê o arena dos combatentes e fica esperando o `combat_resolved` mudar a phase de volta. **Decisão**: ok pra agora. Se virar problema de UX (spectator não sabe o que rolou no combate), MODE-001.5b ou hardening pode adicionar overlay de "AGUARDANDO COMBATE..." específico pro spectator
+- **Hint "rolou" pra oponente que já rolou** (em vez de manter "aguardando..."): pequena melhoria de feedback. Ajuda Royal Rumble com 4 dados onde demora mais até todo mundo confirmar
+- **Não toquei na exibição do resultado pós-combate** (`#combat-result` continua vazio): o gap real é que `combat_resolved.result.scores` vem com a phase já mudada pra `planning`/`game_over`, então o overlay some imediatamente — `result.scores` nunca chega a renderizar. Mesmo gap existia em 1v1. Fica como sub-sessão futura se Gabriel quiser feedback visual do resultado (ex: "REVEAL-001 — pausa de 1.5s entre combat_resolved e a transição de phase")
+- **Reconstrução do arena só quando `participants` muda**: re-roll em Royal Rumble (4 → 2 top scorers) muda o conjunto. Combates normais (mesmo set, várias atualizações) reaproveitam DOM. Reduz flicker
+
+### Validação
+- `node --check ui.js network.js` passou
+- Grep manual: nenhum resíduo `die-0`/`die-1` hardcoded fora do test-client.html (que é debug do server, não tela do jogador)
+- 1v1 preservado: `pendingCombat.participants=[0,1]` produz exatamente 2 dies, layout idêntico ao anterior (apenas sem o "VS" entre eles — decisão consciente de produto)
+- **Validação dinâmica fica com Gabriel**: testar 1 partida 1v1 no itch.io pós-redeploy e ver se a tela de combate continua igual (toque para rolar, dado anima, vencedor avança no tabuleiro). 4v4 ainda travado em `MODE_4V4_LOCKED=true` — só destravar quando MODE-001.6 (Aftermath 4 trajetos) também passar
+
+### Dependências externas (Gabriel cuida)
+- **Re-zipar `html/` e atualizar upload no itch.io**: `index.html`, `ui.js`, `network.js`, `style.css` mudaram
+- **Server NÃO mudou** — Railway sem redeploy
+
+### Notas para próxima sessão
+- Próxima na ordem: **MODE-001.6** — Cliente: Aftermath com 4 trajetos. A maior parte do trabalho de SVG já foi feita em MODE-001.4 (`drawSVG` itera `S.players.forEach`). MODE-001.6 deve ser ajustes finos:
+  1. Ver se as 4 paths coloridas no SVG ficam legíveis sobrepostas (opacidade `0.35` atual pode precisar ajuste)
+  2. `winner-text` em 4v4 pode mostrar "AGENTE III VENCEU" pra um perdedor (ele sabe que perdeu, mas não pra quem). Hoje só usa "MISSÃO CUMPRIDA"/"MISSÃO FALHOU" — talvez mostrar o slot vencedor explícito ajude
+  3. Legenda do Aftermath atualmente só lista BARRICADA / ARMADILHA / CONFRONTO. Pode ganhar miniaturas dos 4 cores se for 4v4
+- **Após MODE-001.6**: destravar 4v4 (`MODE_4V4_LOCKED = false` em [html/startScreen.js:6](../html/startScreen.js#L6)) é a última barreira. Validação dinâmica de uma partida 4v4 ponta-a-ponta vira essencial nessa hora
+- **Reveal de combate pós-rolagem** (gap mencionado nas decisões técnicas): se Gabriel quiser que o resultado numérico apareça antes da phase mudar, vira sub futura `REVEAL-001`. Não bloqueia MODE-001
+
+---
+
+## 2026-04-29 Sessão MODE-001.6 — Cliente: Aftermath com 4 trajetos
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- [html/index.html](../html/index.html) `#review-screen`: ganha 2 elementos novos
+  - `<div id="winner-sub">` logo abaixo do `#winner-text` — sub-título identificando o vencedor explicitamente quando ele não é o próprio jogador (em 4v4, perdedores precisam saber QUEM ganhou)
+  - `<div id="legend-players">` entre o tabuleiro e a legenda de ícones — chips coloridos com `Agente I/II/III/IV`, só visível em 4v4
+- [html/ui.js](../html/ui.js) `showAftermath`:
+  - `winner-text` continua mostrando "MISSÃO CUMPRIDA"/"MISSÃO FALHOU" da perspectiva do jogador (cor do slot vencedor)
+  - `winner-sub` aparece só em 4v4 quando o vencedor NÃO sou eu — texto "AGENTE X VENCEU" na cor do vencedor. Em 1v1 a info é redundante (só tem 2 slots, "MISSÃO FALHOU" já implica que o outro venceu)
+  - `legend-players` aparece só em 4v4 — chips com cor de cada slot. Em 1v1 a cor do header já é suficiente
+  - Passa `w` (slot do vencedor) pra `drawSVG` para destaque visual
+- [html/ui.js](../html/ui.js) `drawSVG(winnerSlot)`:
+  - Vencedor: stroke 4, path opacity 0.7, dot raio 5, dot opacity 1.0 — sai claramente em primeiro plano
+  - Perdedores: stroke 2, path opacity 0.22, dot raio 3, dot opacity 0.45 — visível mas discreto
+  - Resolve o risco mencionado nas notas da MODE-001.4: 4 paths sobrepostas com opacity 0.35 igual pra todos ficavam difíceis de ler em 4v4
+- [html/style.css](../html/style.css):
+  - `#winner-text` perde `margin-bottom` default pra encostar no sub-título
+  - `.winner-sub` — Cinzel 13px, letter-spacing 6px, levemente sobreposto ao texto principal (`margin-top:-6px`)
+  - `.legend-players` — flex-wrap centralizado, gap 18px; cada `.legend-player` é um chip colorido `● Agente X` em monospace 11px
+
+### Decisões técnicas
+- **Detecção de modo via `S.players.length > 2`**: o adapter de network.js não passa `state.mode` pra `window.S`, mas a contagem de players já é suficiente pra distinguir 1v1 (2) vs 4v4 (4). Decisão: manter detecção implícita por ora; se algum dia surgir um modo 3v3 ou similar, refatorar pra `S.mode` direto. Adicionar `mode` ao adapter agora seria especulativo
+- **Sub-título só pra perdedores em 4v4**: pro vencedor "MISSÃO CUMPRIDA" + cor do slot dele já comunica tudo. Adicionar "AGENTE I VENCEU" abaixo seria barulho. Pros perdedores em 4v4, é informação genuinamente nova — sem ela, o jogador derrotado não sabe se foi P1, P3 ou P4 que cruzou primeiro
+- **Em 1v1 winner-sub fica oculto**: minha primeira intuição foi "se o vencedor não sou eu, mostrar AGENTE II VENCEU também em 1v1". Decidi contra: em 1v1 só tem 2 slots e o texto "MISSÃO FALHOU" já implica que o oponente venceu. Adicionar info redundante polui a tela. Caso o Gabriel discorde, é trivial trocar o `S.players.length > 2` por `!isMe`
+- **Stroke widths 4/2 em vez de 3/3**: o destaque do vencedor precisa ser distinguível mesmo quando todas as cores estão saturadas no SVG. Tentei manter stroke 3 com opacidades 0.7/0.25 e ficou OK em 1v1 mas em 4v4 o vencedor empata visualmente com 2-3 perdedores cuja path passa pelas mesmas células. Stroke 4 vs 2 dá um peso visual claro
+- **Não toquei nos resíduos de quando 4v4 não tem trajeto interessante**: jogos 4v4 onde o vencedor avança em 2 turnos vão ter histórico curto (3 pontos no SVG). Os perdedores podem ter histórico mais longo. Visualmente é OK — é o que de fato aconteceu na partida
+
+### Validação
+- `node --check ui.js` passou
+- 1v1 preservado: `S.players.length === 2` faz sub-título e legend-players ficarem ocultos. Aftermath visualmente idêntico ao anterior, exceto pelo stroke do vencedor agora ser 4 em vez de 3 (perdedor é stroke 2 em vez de 3) — destaque sutil mas perceptível
+- 4v4 visualmente: trajeto vencedor sobressai entre os 3 perdedores; sub-título e legenda colorida deixam claro quem é quem
+- **Validação dinâmica fica com Gabriel**: testar 1 partida 1v1 no itch.io pós-redeploy e ver se o Aftermath ficou coerente. 4v4 ainda travado — destravar é o próximo passo (uma linha em startScreen.js)
+
+### Dependências externas (Gabriel cuida)
+- **Re-zipar `html/` e atualizar upload no itch.io**: `index.html`, `ui.js`, `style.css` mudaram (3 arquivos)
+- **Server NÃO mudou** — Railway sem redeploy
+
+### Macro MODE-001 — fechada (6/6)
+Server-side pronto desde MODE-001.1-3 (validado em 2026-04-29). Cliente: 4 jogadores no tabuleiro (MODE-001.4), combate Royal Rumble dinâmico (MODE-001.5), Aftermath com 4 trajetos destacados (MODE-001.6). **Toggle 4v4 pode ser destravado** trocando `MODE_4V4_LOCKED = false` em [html/startScreen.js:6](../html/startScreen.js#L6). Recomendo fazer isso antes da próxima sub pra Gabriel poder testar uma partida 4v4 real e validar tudo de ponta-a-ponta antes de empurrar pra DES-001 (i18n)
+
+### Notas para próxima sessão
+- **Próxima na ordem**: DES-001.1 (i18n base). Mas antes recomendo:
+  - Destravar `MODE_4V4_LOCKED` (1 linha)
+  - Fazer 1 partida 4v4 ponta-a-ponta no itch.io. Cobre matchmaking, spawns, planejamento, combate Royal Rumble (idealmente 3+ players), Aftermath com 4 trajetos
+  - Se algo regredir, sub de hardening fica entre MODE-001 e DES-001
+- **Gap conhecido**: combate `combat_resolved.result.scores` ainda não renderiza visualmente (overlay some antes — phase muda no mesmo evento). Mesmo gap existia em 1v1 e em 4v4 continua. Vira sub `REVEAL-001` se Gabriel quiser feedback de "vencedor: AGENTE III com 6+1=7"
+- **Possível ajuste fino do Aftermath**: em jogos 4v4 longos, 4 trajetos sobrepostos podem ainda assim ficar densos. Se virar problema, opções são (a) destacar só vencedor + jogador atual, esmaecer os outros 2; (b) toggles na legenda pra ligar/desligar trajetos individuais. Não vou implementar especulativamente — precisa o Gabriel ver na prática

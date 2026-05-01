@@ -56,8 +56,8 @@ Backlog organizado em **Macro Tarefas** (épicos) com **sub-sessões** numeradas
 | 37 | MODE-001.2 | ✅ | Server — condição de vitória diagonal (goal por slot) |
 | 38 | MODE-001.3 | ✅ | Server — inventário 1x cada para 4v4 |
 | 39 | MODE-001.4 | ✅ | Cliente — renderizar 4 jogadores (cores distintas) |
-| 40 | MODE-001.5 | ⏳ | Cliente — combate Royal Rumble (3+ dados na tela) |
-| 41 | MODE-001.6 | ⏳ | Cliente — Aftermath com 4 trajetos |
+| 40 | MODE-001.5 | ✅ | Cliente — combate Royal Rumble (3+ dados na tela) |
+| 41 | MODE-001.6 | ✅ | Cliente — Aftermath com 4 trajetos |
 | 42 | DES-001.1 | ⏳ | i18n — sistema base `t()` + locales |
 | 43 | DES-001.2 | ⏳ | i18n — strings do lobby/menu inicial |
 | 44 | DES-001.3 | ⏳ | i18n — strings do game-container |
@@ -244,8 +244,8 @@ Detalhes em [versão anterior do backlog](#) preservados — checklists detalhad
 | MODE-001.2 | ✅ | Server: condição de vitória diagonal — `checkWin` genérico (Opção B aprovada): chegada simultânea no goal em qualquer modo dispara endgame combat. Removida restrição `if (room.mode === "1v1")` (concluído 2026-04-29) |
 | MODE-001.3 | ✅ | Server: inventário 1/1/1 em 4v4 — já estava em `INV_INITIAL_BY_MODE` (constants.js); confirmado via smoke test em MODE-001.1 (concluído 2026-04-29) |
 | MODE-001.4 | ✅ | Cliente: renderizar 4 jogadores no tabuleiro com cores distintas — P3 roxo `#c084fc`, P4 dourado `#facc15`. Tokens em :root + `.p3-piece`/`.p4-piece`. `renderHeader`/`setupBoardOnce`/`renderPieces`/`renderCell`/`rollDie`/`drawSVG`/`winner-text` generalizados pra N players (concluído 2026-04-29) |
-| MODE-001.5 | ⏳ | Cliente: tela de combate Royal Rumble — exibir 3+ dados quando 3+ jogadores colidem |
-| MODE-001.6 | ⏳ | Cliente: Aftermath com 4 trajetos coloridos |
+| MODE-001.5 | ✅ | Cliente: tela de combate Royal Rumble — overlay agora gera N dados (2-4) dinamicamente a partir de `pendingCombat.participants`. Spectators de combates parciais em 4v4 veem o overlay sem botão de rolar (concluído 2026-04-29) |
+| MODE-001.6 | ✅ | Cliente: Aftermath com 4 trajetos coloridos — vencedor sai destacado (stroke 4, opacity 0.7), perdedores discretos (stroke 2, opacity 0.22). Sub-título "AGENTE X VENCEU" pra perdedores em 4v4. Legenda de cores por slot só em 4v4 (concluído 2026-04-29) |
 
 **Decisões resolvidas (2026-04-29):**
 - Empate em chegada simultânea no goal (4v4): **endgame combat (Royal Rumble) genérico** (Opção B). Mesma regra do 1v1, agora vale pra qualquer número de players que chegam no mesmo turno.

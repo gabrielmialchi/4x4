@@ -86,28 +86,12 @@
     </div>
 </div>
 
-<!-- COMBAT -->
+<!-- COMBAT — arena populada dinamicamente por ui.js (1v1: 2 dados; 4v4: 2-4 dados em Royal Rumble) -->
 <div id="combat-overlay">
     <div id="combat-title">CONFRONTO</div>
     <div class="combat-divider"></div>
 
-    <div class="combat-arena">
-        <div class="die-wrap">
-            <div class="die-label" id="lbl-0" style="color:var(--p1)">Agente I</div>
-            <div id="die-0" class="die idle" onclick="rollDie(0)">·</div>
-            <div id="hint-0" class="die-hint">toque para rolar</div>
-            <div id="math-0" class="die-math"></div>
-        </div>
-
-        <div class="combat-vs">VS</div>
-
-        <div class="die-wrap">
-            <div class="die-label" id="lbl-1" style="color:var(--p2)">Agente II</div>
-            <div id="die-1" class="die idle" onclick="rollDie(1)">·</div>
-            <div id="hint-1" class="die-hint">aguardando...</div>
-            <div id="math-1" class="die-math"></div>
-        </div>
-    </div>
+    <div class="combat-arena" id="combat-arena"></div>
 
     <div id="combat-result"></div>
 </div>
@@ -115,10 +99,12 @@
 <!-- AFTERMATH -->
 <div id="review-screen">
     <h1 id="winner-text">AFTERMATH</h1>
+    <div id="winner-sub" class="winner-sub" style="display:none"></div>
     <div id="after-grid-container" style="position:relative;width:max-content;margin:0 auto">
         <div id="after-grid" class="grid" style="background:var(--surf);border:1px solid var(--bdr2)"></div>
         <svg id="svg-paths" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10"></svg>
     </div>
+    <div id="legend-players" class="legend-players" style="display:none"></div>
     <div class="legend-text">
         ◈ = BARRICADA &nbsp;·&nbsp; ✦ = ARMADILHA &nbsp;·&nbsp; □ = CONFRONTO<br>
         <span style="opacity:.35;text-decoration:line-through;color:var(--text)">riscado</span> = destruído / desperdiçado
