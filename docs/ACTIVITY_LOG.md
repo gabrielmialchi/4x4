@@ -1378,3 +1378,17 @@ No cliente, `adaptStateForMe` ([html/network.js](../html/network.js)) monta `S.p
 
 ### Nota de processo
 Bugs e ajustes fora do planning (como este) passam a ser sempre documentados aqui, mesmo sem código de sub-sessão mapeado, pra manter o histórico completo
+
+---
+
+## 2026-06-13 Sessão CHORE-001 — Remover WebBuilds do versionamento
+**Status:** Completo
+**Branch:** —
+
+### Feito
+- [.gitignore](../.gitignore): adicionado `WebBuilds/` e `*.zip` — builds zipadas (Alpha + Beta) são artefatos binários distribuídos via itch.io, não código-fonte
+- `git rm --cached -r WebBuilds/` — 5 zips (Alpha 2.1/2.2/2.2_Visual + Beta v1.0/v1.1) saem do tracking; permanecem no disco local
+- Commit `662ad58` enviado pro `origin/main`
+
+### Nota
+Os blobs dos zips já commitados continuam no histórico do git (repo ~1.4MB, não é crítico hoje). Se o repo crescer muito com builds futuras versionadas por engano, uma limpeza de histórico (`git filter-repo` + force-push) pode ser considerada — operação destrutiva, requer decisão explícita do Gabriel
