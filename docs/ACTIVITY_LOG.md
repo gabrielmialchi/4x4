@@ -1348,3 +1348,33 @@ Server-side pronto desde MODE-001.1-3 (validado em 2026-04-29). Cliente: 4 jogad
   - Se algo regredir, sub de hardening fica entre MODE-001 e DES-001
 - **Gap conhecido**: combate `combat_resolved.result.scores` ainda não renderiza visualmente (overlay some antes — phase muda no mesmo evento). Mesmo gap existia em 1v1 e em 4v4 continua. Vira sub `REVEAL-001` se Gabriel quiser feedback de "vencedor: AGENTE III com 6+1=7"
 - **Possível ajuste fino do Aftermath**: em jogos 4v4 longos, 4 trajetos sobrepostos podem ainda assim ficar densos. Se virar problema, opções são (a) destacar só vencedor + jogador atual, esmaecer os outros 2; (b) toggles na legenda pra ligar/desligar trajetos individuais. Não vou implementar especulativamente — precisa o Gabriel ver na prática
+
+---
+
+## 2026-06-13 Sessão BUG-002 — Fix: "Criar Sala" pulava direto pro tabuleiro sem mostrar o código
+**Status:** Completo
+**Branch:** —
+
+### Bug relatado
+Ao clicar "Criar Sala Privada", o jogo não mostrava a tela com o código (ABCD) pra convidar o oponente — ia direto pro tabuleiro vazio, sem ninguém pra entrar.
+
+### Causa
+`server/rooms.js` `createPrivateRoom` cria a sala com `players: [makePlayer(slot:0)]` — só o criador existe no array; o slot do oponente nem é alocado até alguém dar join (correto, server não muda).
+
+No cliente, `adaptStateForMe` ([html/network.js](../html/network.js)) monta `S.players` só com quem existe (`state.me` + `state.opponents`) — sala recém-criada gera `S.players` com 1 elemento. `syncUI` ([html/ui.js](../html/ui.js)) calculava `allConnected = S.players.every(p => p.connected)`, que é `true` vacuamente pra um array de 1 conectado → pulava a `private-room-screen` e ia direto pro `game-container`.
+
+### Feito
+- [html/gameState.js](../html/gameState.js): novo export `MAX_PLAYERS = { "1v1": 2, "4v4": 4 }` espelhando `server/constants.js`
+- [html/network.js](../html/network.js) `adaptStateForMe`: agora propaga `state.mode` pro `window.S`
+- [html/ui.js](../html/ui.js) `syncUI`: `allConnected` agora exige `S.players.length === MAX_PLAYERS[S.mode]` além de todos conectados
+- [html/ui.js](../html/ui.js) `renderPrivateRoom`: itera sobre `MAX_PLAYERS[S.mode]` slots (não só `S.players`, que é esparso) — slots vazios mostram "Aguardando…" e o contador fica correto (ex: `1/2`)
+
+### Validação
+- `node --check` passou em gameState.js, network.js, ui.js
+- Server **não mudou** — sem redeploy no Railway
+
+### Dependências externas (Gabriel cuida)
+- Re-zipar `html/` e atualizar upload no itch.io — `gameState.js`, `network.js`, `ui.js` mudaram (3 arquivos)
+
+### Nota de processo
+Bugs e ajustes fora do planning (como este) passam a ser sempre documentados aqui, mesmo sem código de sub-sessão mapeado, pra manter o histórico completo

@@ -6,6 +6,9 @@ export const DICE = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 // Spawn de cada slot. Hoje 1v1 (slots 0 e 1); expandido para 4 slots em MODE-001.
 export const SPAWN_PER_SLOT = { 0: [0, 0], 1: [3, 3] };
 
+// Quantidade de slots esperados por modo (espelha server/constants.js).
+export const MAX_PLAYERS = { "1v1": 2, "4v4": 4 };
+
 // Tabuleiro 4x4 fixo.
 export const GRID_SIZE = 4;
 

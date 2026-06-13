@@ -77,6 +77,7 @@ function adaptStateForMe(state) {
         winner: state.winner,
         isEndgame: state.isEndgame,
         matchmaking: state.matchmaking,
+        mode: state.mode,
         pendingCombat: state.pendingCombat || null,
     };
 }

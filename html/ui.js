@@ -6,7 +6,7 @@
 //
 // syncUI é exportada para ser passada como callback de initMultiplayer (em network.js).
 
-import { DICE, SPAWN_PER_SLOT, GRID_SIZE, arrEq } from './gameState.js';
+import { DICE, SPAWN_PER_SLOT, GRID_SIZE, MAX_PLAYERS, arrEq } from './gameState.js';
 import { actReady, actRollDie, actRestartGame } from './network.js';
 import { getTotalMod } from './combat.js';
 import { calcFogMask, validSkillTargets } from './validators.js';
@@ -29,7 +29,9 @@ export function syncUI(){
     if(S.winner!==undefined&&S.winner>=0){showAftermath(S.winner);return;}
     else{document.getElementById('review-screen').style.display='none';}
 
-    const allConnected = S.players.every(p => p.connected);
+    // opponents ausentes (sala recém-criada) não entram em S.players — checar
+    // contagem de slots esperada pro modo, não só os presentes
+    const allConnected = S.players.length === MAX_PLAYERS[S.mode] && S.players.every(p => p.connected);
 
     if(allConnected){
         document.getElementById('private-room-screen').style.display='none';
@@ -62,18 +64,19 @@ function renderPrivateRoom(){
     const codeEl = document.getElementById('private-code');
     if(window.roomId) codeEl.textContent = window.roomId;
 
-    const total = S.players.length;
-    const connected = S.players.filter(p => p.connected).length;
+    const total = MAX_PLAYERS[S.mode];
+    const connected = S.players.filter(p => p && p.connected).length;
     document.getElementById('private-players-count').textContent = `${connected}/${total}`;
 
     const list = document.getElementById('private-players-list');
     list.innerHTML = '';
-    for(const p of S.players){
-        const isMe = p.id === window.myId;
+    for(let id = 0; id < total; id++){
+        const p = S.players[id];
+        const isMe = id === window.myId;
         const div = document.createElement('div');
-        div.className = 'private-player-slot' + (p.connected ? ' connected' : ' empty');
-        const label = p.connected
-            ? (isMe ? `Você — Agente ${ROMAN[p.id]}` : `Agente ${ROMAN[p.id]}`)
+        div.className = 'private-player-slot' + (p?.connected ? ' connected' : ' empty');
+        const label = p?.connected
+            ? (isMe ? `Você — Agente ${ROMAN[id]}` : `Agente ${ROMAN[id]}`)
             : 'Aguardando…';
         div.innerHTML = `<span class="dot"></span><span>${label}</span>`;
         list.appendChild(div);
