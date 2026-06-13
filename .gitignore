@@ -39,6 +39,12 @@ build/
 out/
 *.tsbuildinfo
 
+# Builds zipadas do jogo (WebBuilds/) — artefatos binários, não fazem parte
+# do código-fonte e inflam o histórico do git a cada novo build. Mantidos
+# localmente; distribuição via itch.io.
+WebBuilds/
+*.zip
+
 # --- Logs ---
 logs/
 *.log
